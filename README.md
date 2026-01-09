@@ -32,8 +32,7 @@ mise install
 
 # Backend
 cd backend
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+uv sync --all-extras
 
 # Frontend
 cd frontend
@@ -41,10 +40,10 @@ npm install
 
 # Run migrations
 cd backend
-alembic upgrade head
+uv run alembic upgrade head
 
 # Start backend
-uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload
 
 # Start frontend
 cd frontend
