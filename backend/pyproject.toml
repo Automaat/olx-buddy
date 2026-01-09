@@ -5,7 +5,7 @@ description = "Vinted/OLX sales management webapp"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi==0.109.0",
-    "uvicorn[standard]==0.27.0",
+    "uvicorn[standard]==0.40.0",
     "python-multipart==0.0.21",
     "sqlalchemy==2.0.45",
     "alembic==1.17.2",
