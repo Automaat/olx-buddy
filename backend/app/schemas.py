@@ -1,8 +1,19 @@
 """Pydantic schemas for API request/response validation."""
 
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, Field, HttpUrl
+
+
+class ItemCondition(str, Enum):
+    """Valid item condition values."""
+
+    NEW = "new"
+    LIKE_NEW = "like_new"
+    GOOD = "good"
+    FAIR = "fair"
+    POOR = "poor"
 
 
 class ListingBase(BaseModel):

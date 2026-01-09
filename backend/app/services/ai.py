@@ -189,6 +189,13 @@ class AIService:
             msg = f"Image not found: {image_path}"
             raise FileNotFoundError(msg)
 
+        # Check file size (max 2MB)
+        max_size = 2 * 1024 * 1024  # 2MB
+        file_size = path.stat().st_size
+        if file_size > max_size:
+            msg = f"Image too large: {file_size} bytes (max {max_size} bytes)"
+            raise ValueError(msg)
+
         with path.open("rb") as f:
             return base64.b64encode(f.read()).decode("utf-8")
 

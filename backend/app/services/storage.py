@@ -1,5 +1,6 @@
 """Storage service for handling file uploads."""
 
+import io
 import logging
 import uuid
 from pathlib import Path
@@ -41,8 +42,8 @@ class StorageService:
         content = await file.read()
 
         try:
-            # Open with Pillow
-            img = Image.open(file.file)
+            # Open with Pillow from bytes
+            img = Image.open(io.BytesIO(content))
 
             # Convert RGBA to RGB if needed
             if img.mode in ("RGBA", "LA", "P"):
@@ -90,9 +91,17 @@ class StorageService:
     def delete_image(self, file_path: str) -> bool:
         """Delete an image file."""
         try:
+            base_dir = self.upload_dir.resolve()
             path = Path(file_path)
-            if path.exists() and path.is_relative_to(self.upload_dir):
-                path.unlink()
+            resolved_path = path.resolve(strict=False)
+
+            # Ensure the resolved path is within the upload directory before any filesystem ops
+            if not resolved_path.is_relative_to(base_dir):
+                logger.warning("Attempted to delete file outside upload directory: %s", file_path)
+                return False
+
+            if resolved_path.exists():
+                resolved_path.unlink()
                 logger.info("Deleted image: %s", file_path)
                 return True
             return False

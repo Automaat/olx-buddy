@@ -31,10 +31,11 @@ class ScraperService:
 
     def __init__(self) -> None:
         self.rate_limit = settings.scrape_rate_limit
+        self._last_request_time: float = 0.0
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36",
+            "Chrome/131.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
             "Accept-Encoding": "gzip, deflate, br",
@@ -42,6 +43,16 @@ class ScraperService:
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
         }
+
+    async def _apply_rate_limit(self) -> None:
+        """Apply rate limiting between requests."""
+        import time
+
+        current_time = time.time()
+        time_since_last = current_time - self._last_request_time
+        if time_since_last < self.rate_limit:
+            await asyncio.sleep(self.rate_limit - time_since_last)
+        self._last_request_time = time.time()
 
     async def find_similar_items(
         self,
@@ -84,7 +95,7 @@ class ScraperService:
         max_results: int,
     ) -> list[SimilarItem]:
         """Search OLX for similar items."""
-        await asyncio.sleep(self.rate_limit)
+        await self._apply_rate_limit()
 
         search_url = f"https://www.olx.pl/oferty/q-{quote_plus(query)}/"
 
@@ -150,7 +161,7 @@ class ScraperService:
         max_results: int,
     ) -> list[SimilarItem]:
         """Search Vinted for similar items."""
-        await asyncio.sleep(self.rate_limit)
+        await self._apply_rate_limit()
 
         # Build search query
         search_params = {"search_text": query}
@@ -219,10 +230,10 @@ class ScraperService:
 
     def _parse_price(self, price_text: str) -> float:
         """Parse price from text."""
-        # Remove currency symbols and spaces
-        cleaned = re.sub(r"[^\d,.]", "", price_text)
-        # Handle Polish format (1 234,56 or 1.234,56)
-        cleaned = cleaned.replace(" ", "").replace(",", ".")
+        # Remove currency symbols while keeping digits, commas, dots and spaces
+        cleaned = re.sub(r"[^\d,.\s]", "", price_text)
+        # Handle Polish format (1 234,56 or 1.234,56) by removing thousand separators
+        cleaned = cleaned.replace(" ", "").replace(".", "").replace(",", ".")
         try:
             return float(cleaned)
         except ValueError:
@@ -260,7 +271,20 @@ class PriceSuggestionService:
         brand: str | None = None,
         condition: str | None = None,
     ) -> dict[str, Any]:
-        """Suggest price based on similar items."""
+        """Suggest price based on similar items.
+
+        Args:
+            search_query: Text to search for similar items
+            category: Optional category filter
+            brand: Optional brand filter
+            condition: Item condition - one of: new, like_new, good, fair, poor
+                      Determines price percentile (new=90th, like_new=80th, good=60th,
+                      fair=40th, poor=20th). Defaults to 'good' if not provided.
+
+        Returns:
+            Dict containing suggested_price, min/max/median prices, sample_size,
+            and list of similar_items with similarity scores.
+        """
         similar_items = await self.scraper.find_similar_items(
             search_query, category, brand, max_results=20
         )
@@ -283,17 +307,19 @@ class PriceSuggestionService:
         max_price = max(prices)
         median_price = prices[len(prices) // 2]
 
-        # Suggest price based on condition
+        # Suggest price based on condition using array indexing approximation of percentiles
+        # Note: This uses simplified percentile calculation via array position
+        # For N sorted prices: idx = int(N * percentile_fraction)
         condition_multiplier = {
-            "new": 0.9,  # 90th percentile
-            "like_new": 0.8,  # 80th percentile
-            "good": 0.6,  # 60th percentile (median)
-            "fair": 0.4,  # 40th percentile
-            "poor": 0.2,  # 20th percentile
+            "new": 0.9,  # Approximates 90th percentile
+            "like_new": 0.8,  # Approximates 80th percentile
+            "good": 0.6,  # Approximates 60th percentile
+            "fair": 0.4,  # Approximates 40th percentile
+            "poor": 0.2,  # Approximates 20th percentile
         }.get(condition or "good", 0.6)
 
-        percentile_idx = int(len(prices) * condition_multiplier)
-        suggested_price = prices[percentile_idx] if percentile_idx < len(prices) else median_price
+        percentile_idx = int(condition_multiplier * (len(prices) - 1))
+        suggested_price = prices[percentile_idx]
 
         return {
             "suggested_price": round(suggested_price, 2),

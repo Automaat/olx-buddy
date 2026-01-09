@@ -1,6 +1,7 @@
 """API endpoints for AI-powered description and price generation."""
 
 import logging
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -9,6 +10,7 @@ from app.schemas import (
     CategoryResponse,
     GenerateDescriptionResponse,
     ImageUploadResponse,
+    ItemCondition,
 )
 from app.services.ai import SUPPORTED_CATEGORIES, AIService
 from app.services.scraper import PriceSuggestionService, ScraperService
@@ -65,7 +67,7 @@ async def generate_description(
     category: Annotated[str, Form()],
     image_paths: Annotated[str, Form(description="Comma-separated image paths")],
     brand: Annotated[str | None, Form()] = None,
-    condition: Annotated[str | None, Form()] = None,
+    condition: Annotated[ItemCondition | None, Form()] = None,
     size: Annotated[str | None, Form()] = None,
     additional_details: Annotated[str | None, Form()] = None,
     include_price_suggestion: Annotated[bool, Form()] = True,
@@ -86,13 +88,34 @@ async def generate_description(
             detail="At least one image path required",
         )
 
+    # Validate paths are within upload directory
+    upload_dir = storage_service.upload_dir.resolve()
+    for path_str in paths:
+        try:
+            path = Path(path_str).resolve(strict=False)
+            if not path.is_relative_to(upload_dir):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Access denied: Invalid image path",
+                )
+            if not path.exists():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Image not found: {path_str}",
+                )
+        except (ValueError, OSError) as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image path: {path_str}",
+            ) from e
+
     try:
         # Generate description
         description = await ai_service.generate_description(
             category=category,
             image_paths=paths,
             brand=brand,
-            condition=condition,
+            condition=condition.value if condition else None,
             size=size,
             additional_details=additional_details,
         )
@@ -104,13 +127,17 @@ async def generate_description(
                 # Build search query from brand and category
                 search_query = " ".join(filter(None, [brand, category.replace("_", " ")]))
                 if additional_details:
-                    search_query += f" {additional_details[:50]}"
+                    # Truncate at word boundary to avoid cutting words mid-way
+                    truncated = additional_details[:100]
+                    if len(additional_details) > 100:
+                        truncated = truncated.rsplit(" ", 1)[0]
+                    search_query += f" {truncated}"
 
                 price_data = await price_service.suggest_price(
                     search_query=search_query,
                     category=category,
                     brand=brand,
-                    condition=condition,
+                    condition=condition.value if condition else None,
                 )
             except Exception as e:
                 logger.warning("Price suggestion failed: %s", e)
