@@ -5,3 +5,19 @@ uv = "latest"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
+
+[tasks.dev]
+description = "Run app with postgres (with live reload)"
+run = "docker compose -f docker-compose.dev.yml up --build"
+
+[tasks."dev:down"]
+description = "Stop dev environment"
+run = "docker compose -f docker-compose.dev.yml down"
+
+[tasks."dev:logs"]
+description = "Show dev logs"
+run = "docker compose -f docker-compose.dev.yml logs -f"
+
+[tasks."dev:shell"]
+description = "Open shell in backend container"
+run = "docker compose -f docker-compose.dev.yml exec backend /bin/bash"

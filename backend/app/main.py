@@ -29,7 +29,10 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=[
+        "http://localhost:5173",  # Local vite
+        "http://frontend:5173",  # Docker vite
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
