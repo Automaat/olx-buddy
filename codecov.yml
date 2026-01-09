@@ -26,10 +26,10 @@ comment:
   layout: "reach,diff,flags,tree"
   behavior: default
   require_changes: false
-  after_n_builds: 1
+  after_n_builds: 2
 
 ignore:
-  - "tests/"
+  - "backend/tests/"
   - "**/__tests__/"
   - "**/test_*.py"
   - "**/*.test.ts"
