@@ -2,7 +2,7 @@
 name = "olx-buddy"
 version = "0.1.0"
 description = "Vinted/OLX sales management webapp"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi==0.109.0",
     "uvicorn[standard]==0.27.0",
@@ -14,7 +14,7 @@ dependencies = [
     "apscheduler==3.11.2",
     "python-dotenv==1.2.1",
     "openai==2.14.0",
-    "pillow==10.2.0",
+    "pillow==12.1.0",
     "pydantic==2.5.3",
     "pydantic-settings==2.1.0",
     "python-jose[cryptography]==3.5.0",
@@ -32,7 +32,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -50,7 +50,7 @@ ignore = []
 "__init__.py" = ["F401"]
 
 [tool.pyrefly]
-python_version = "3.11"
+python_version = "3.14"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
