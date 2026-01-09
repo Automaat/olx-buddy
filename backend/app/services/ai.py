@@ -77,9 +77,7 @@ class AIService:
         additional_details: str | None,
     ) -> str:
         """Build category-specific prompt for description generation."""
-        base_prompt = CATEGORY_PROMPTS.get(
-            category, CATEGORY_PROMPTS["default"]
-        ).format(
+        base_prompt = CATEGORY_PROMPTS.get(category, CATEGORY_PROMPTS["default"]).format(
             brand=brand or "unknown",
             condition=condition or "good",
             size=size or "",
@@ -90,9 +88,7 @@ class AIService:
 
         return base_prompt
 
-    async def _generate_with_openai(
-        self, prompt: str, image_paths: list[str]
-    ) -> str:
+    async def _generate_with_openai(self, prompt: str, image_paths: list[str]) -> str:
         """Generate description using OpenAI GPT-4V."""
         if not self.openai_client:
             msg = "OpenAI client not initialized"
@@ -125,9 +121,7 @@ class AIService:
 
         return response.choices[0].message.content or ""
 
-    async def _generate_with_anthropic(
-        self, prompt: str, image_paths: list[str]
-    ) -> str:
+    async def _generate_with_anthropic(self, prompt: str, image_paths: list[str]) -> str:
         """Generate description using Anthropic Claude."""
         if not self.anthropic_api_key:
             msg = "Anthropic API key not configured"
@@ -168,9 +162,7 @@ class AIService:
             data = response.json()
             return data["content"][0]["text"]
 
-    async def _generate_with_ollama(
-        self, prompt: str, image_paths: list[str]
-    ) -> str:
+    async def _generate_with_ollama(self, prompt: str, image_paths: list[str]) -> str:
         """Generate description using local Ollama model."""
         if not self.ollama_base_url:
             msg = "Ollama base URL not configured"

@@ -71,9 +71,7 @@ class ScraperService:
 
         # Calculate similarity scores
         for item in results:
-            item.similarity_score = self._calculate_similarity(
-                search_query, item.title
-            )
+            item.similarity_score = self._calculate_similarity(search_query, item.title)
 
         # Sort by similarity
         results.sort(key=lambda x: x.similarity_score, reverse=True)
@@ -164,18 +162,16 @@ class ScraperService:
 
         try:
             async with httpx.AsyncClient(headers=self.headers, timeout=15.0) as client:
-                response = await client.get(
-                    search_url, params=search_params, follow_redirects=True
-                )
+                response = await client.get(search_url, params=search_params, follow_redirects=True)
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.text, "html.parser")
                 items = []
 
                 # Vinted uses feed-grid__item class
-                listings = soup.find_all(
-                    "div", class_=lambda x: x and "feed-grid__item" in x
-                )[:max_results]
+                listings = soup.find_all("div", class_=lambda x: x and "feed-grid__item" in x)[
+                    :max_results
+                ]
 
                 for listing in listings:
                     try:
@@ -187,17 +183,13 @@ class ScraperService:
                         url = urljoin("https://www.vinted.pl", link_elem["href"])
 
                         # Title
-                        title_elem = listing.find(
-                            class_=lambda x: x and "ItemBox_title" in str(x)
-                        )
+                        title_elem = listing.find(class_=lambda x: x and "ItemBox_title" in str(x))
                         if not title_elem:
                             continue
                         title = title_elem.get_text(strip=True)
 
                         # Price
-                        price_elem = listing.find(
-                            class_=lambda x: x and "ItemBox_price" in str(x)
-                        )
+                        price_elem = listing.find(class_=lambda x: x and "ItemBox_price" in str(x))
                         if not price_elem:
                             continue
 

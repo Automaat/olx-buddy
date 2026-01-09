@@ -27,7 +27,7 @@ price_service = PriceSuggestionService(scraper_service)
 
 @router.post("/upload-images", response_model=ImageUploadResponse)
 async def upload_images(
-    files: Annotated[list[UploadFile], File(description="Images to upload (max 10)")]
+    files: Annotated[list[UploadFile], File(description="Images to upload (max 10)")],
 ) -> ImageUploadResponse:
     """Upload item photos for description generation."""
     if len(files) > 10:
@@ -102,9 +102,7 @@ async def generate_description(
         if include_price_suggestion:
             try:
                 # Build search query from brand and category
-                search_query = " ".join(
-                    filter(None, [brand, category.replace("_", " ")])
-                )
+                search_query = " ".join(filter(None, [brand, category.replace("_", " ")]))
                 if additional_details:
                     search_query += f" {additional_details[:50]}"
 
