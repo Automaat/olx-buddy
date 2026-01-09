@@ -71,7 +71,7 @@ const error = ref('')
 
 const filters = ref({
   platform: '',
-  status: '',
+  status: 'active',
 })
 
 const loadListings = async () => {
