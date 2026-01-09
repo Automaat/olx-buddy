@@ -8,7 +8,7 @@ dependencies = [
     "uvicorn[standard]==0.27.0",
     "python-multipart==0.0.21",
     "sqlalchemy==2.0.45",
-    "alembic==1.13.1",
+    "alembic==1.17.2",
     "psycopg2-binary==2.9.11",
     "httpx==0.26.0",
     "apscheduler==3.11.2",
