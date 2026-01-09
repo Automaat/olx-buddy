@@ -94,17 +94,12 @@ class AIService:
             msg = "OpenAI client not initialized"
             raise RuntimeError(msg)
 
-        messages: list[dict[str, Any]] = [
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": prompt}],
-            }
-        ]
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
 
         # Add images
         for image_path in image_paths[:4]:  # Limit to 4 images
             image_data = self._load_image_base64(image_path)
-            messages[0]["content"].append(
+            content.append(
                 {
                     "type": "image_url",
                     "image_url": {
@@ -115,7 +110,7 @@ class AIService:
 
         response = await self.openai_client.chat.completions.create(
             model="gpt-4o",
-            messages=messages,
+            messages=[{"role": "user", "content": content}],  # type: ignore[arg-type]
             max_tokens=500,
         )
 

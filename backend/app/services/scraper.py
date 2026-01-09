@@ -58,13 +58,13 @@ class ScraperService:
             olx_task, vinted_task, return_exceptions=True
         )
 
-        results = []
-        if not isinstance(olx_items, Exception):
+        results: list[SimilarItem] = []
+        if not isinstance(olx_items, BaseException):
             results.extend(olx_items)
         else:
             logger.error("OLX search failed: %s", olx_items)
 
-        if not isinstance(vinted_items, Exception):
+        if not isinstance(vinted_items, BaseException):
             results.extend(vinted_items)
         else:
             logger.error("Vinted search failed: %s", vinted_items)
