@@ -108,9 +108,10 @@ class AIService:
                 }
             )
 
+        # pyrefly: ignore
         response = await self.openai_client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": content}],  # pyrefly: ignore
+            messages=[{"role": "user", "content": content}],
             max_tokens=500,
         )
 
