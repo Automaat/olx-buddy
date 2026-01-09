@@ -1,0 +1,38 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+        if_ci_failed: error
+
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+  flags:
+    backend:
+      paths:
+        - backend/
+      carryforward: true
+
+    frontend:
+      paths:
+        - frontend/
+      carryforward: true
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+  after_n_builds: 1
+
+ignore:
+  - "tests/"
+  - "**/__tests__/"
+  - "**/test_*.py"
+  - "**/*.test.ts"
+  - "**/*.test.js"
+  - "**/*.spec.ts"
+  - "**/*.spec.js"
