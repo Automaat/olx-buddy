@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import listings
+from app.routers import generate, listings
 from app.scheduler import scheduler
 
 
@@ -37,6 +37,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(listings.router)
+app.include_router(generate.router)
 
 
 @app.get("/")
