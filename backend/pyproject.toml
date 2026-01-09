@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings==2.12.0",
     "python-jose[cryptography]==3.5.0",
     "passlib[bcrypt]==1.7.4",
+    "beautifulsoup4==4.12.3",
 ]
 
 [project.optional-dependencies]

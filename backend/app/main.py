@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import listings
+from app.routers import generate, listings
 from app.scheduler import scheduler
 
 
@@ -29,7 +29,10 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=[
+        "http://localhost:5173",  # Local vite
+        "http://frontend:5173",  # Docker vite
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +40,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(listings.router)
+app.include_router(generate.router)
 
 
 @app.get("/")

@@ -1,8 +1,19 @@
 """Pydantic schemas for API request/response validation."""
 
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, Field, HttpUrl
+
+
+class ItemCondition(str, Enum):
+    """Valid item condition values."""
+
+    NEW = "new"
+    LIKE_NEW = "like_new"
+    GOOD = "good"
+    FAIR = "fair"
+    POOR = "poor"
 
 
 class ListingBase(BaseModel):
@@ -75,3 +86,38 @@ class AddListingByURL(BaseModel):
     url: HttpUrl
     platform: str = Field(..., pattern="^(vinted|olx)$")
     initial_cost: float | None = Field(None, gt=0)
+
+
+class GenerateDescriptionRequest(BaseModel):
+    """Schema for description generation request."""
+
+    category: str = Field(..., max_length=50)
+    brand: str | None = Field(None, max_length=100)
+    condition: str | None = Field(None, max_length=50)
+    size: str | None = Field(None, max_length=50)
+    additional_details: str | None = None
+
+
+class GenerateDescriptionResponse(BaseModel):
+    """Schema for description generation response."""
+
+    description: str
+    suggested_price: float | None = None
+    min_price: float | None = None
+    max_price: float | None = None
+    median_price: float | None = None
+    sample_size: int = 0
+    similar_items: list[dict] = []
+
+
+class ImageUploadResponse(BaseModel):
+    """Schema for image upload response."""
+
+    image_paths: list[str]
+    count: int
+
+
+class CategoryResponse(BaseModel):
+    """Schema for category list response."""
+
+    categories: list[str]

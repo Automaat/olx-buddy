@@ -1,0 +1,21 @@
+FROM python:3.14-slim
+
+WORKDIR /app
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+# Copy dependency files
+COPY backend/pyproject.toml backend/uv.lock* ./
+
+# Install dependencies
+RUN uv sync
+
+# Copy entrypoint
+COPY backend/entrypoint.dev.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Code will be mounted as volume
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.sh"]
