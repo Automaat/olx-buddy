@@ -10,7 +10,7 @@ dependencies = [
     "sqlalchemy==2.0.45",
     "alembic==1.13.1",
     "psycopg2-binary==2.9.11",
-    "httpx==0.26.0",
+    "httpx==0.28.1",
     "apscheduler==3.11.2",
     "python-dotenv==1.0.0",
     "openai==1.109.1",
