@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS backend-build
+FROM python:3.14-slim AS backend-build
 
 WORKDIR /app
 COPY backend/requirements.txt .
@@ -12,7 +12,7 @@ RUN npm ci
 COPY frontend/ .
 RUN npm run build
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
