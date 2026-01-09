@@ -15,8 +15,17 @@ async def add_listing_by_url(
     db: Session = Depends(get_db),
 ):
     """Add listing by pasting URL."""
+    # Extract external ID from URL path
+    url_path = listing_data.url.path
+    if not url_path:
+        raise HTTPException(status_code=400, detail="Invalid URL: missing path")
+
+    external_id = url_path.split("/")[-1]
+    if not external_id:
+        raise HTTPException(status_code=400, detail="Invalid URL: cannot extract listing ID")
+
     # Check if listing already exists
-    existing = crud.get_listing_by_external_id(db, listing_data.url.path.split("/")[-1])
+    existing = crud.get_listing_by_external_id(db, external_id)
     if existing:
         raise HTTPException(status_code=400, detail="Listing already exists")
 
@@ -24,7 +33,7 @@ async def add_listing_by_url(
     # For now, create minimal listing
     listing_create = schemas.ListingCreate(
         platform=listing_data.platform,
-        external_id=str(listing_data.url.path.split("/")[-1]),
+        external_id=external_id,
         url=str(listing_data.url),
         initial_cost=listing_data.initial_cost,
     )
