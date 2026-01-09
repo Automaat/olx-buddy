@@ -39,6 +39,7 @@ jobs:
         with:
           file: ./backend/coverage.xml
           flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   frontend:
     runs-on: ubuntu-latest
@@ -60,6 +61,16 @@ jobs:
 
       - name: Type check
         run: npm run type-check
+
+      - name: Test with Vitest
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./frontend/coverage/lcov.info
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build
         run: npm run build
