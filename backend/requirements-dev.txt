@@ -1,0 +1,10 @@
+# Testing
+pytest==7.4.4
+pytest-cov==4.1.0
+pytest-asyncio==0.23.3
+
+# Linting & Formatting
+ruff==0.1.14
+
+# Type Checking
+mypy==1.8.0
