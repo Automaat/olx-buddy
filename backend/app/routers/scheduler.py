@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from apscheduler.job import Job
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -60,7 +60,7 @@ async def list_jobs() -> list[JobInfo]:
 
 @router.get("/jobs/{job_id}/history", response_model=list[JobExecutionResponse])
 async def get_job_history(
-    job_id: str, limit: int = 50, db: Session = Depends(get_db)
+    job_id: str, limit: int = Query(default=50, ge=1, le=1000), db: Session = Depends(get_db)
 ) -> list[Any]:
     """Get execution history for a specific job."""
     executions = get_job_executions(db, job_id=job_id, limit=limit)
@@ -81,7 +81,9 @@ async def get_job_history(
 
 
 @router.get("/history", response_model=list[JobExecutionResponse])
-async def get_all_history(limit: int = 100, db: Session = Depends(get_db)) -> list[Any]:
+async def get_all_history(
+    limit: int = Query(default=100, ge=1, le=1000), db: Session = Depends(get_db)
+) -> list[Any]:
     """Get execution history for all jobs."""
     executions = get_job_executions(db, limit=limit)
 

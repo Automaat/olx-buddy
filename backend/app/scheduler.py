@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from app.config import settings
 from app.crud import (
     create_competitor_price,
     create_job_execution,
@@ -14,6 +15,7 @@ from app.crud import (
     update_job_execution,
 )
 from app.database import SessionLocal
+from app.models import Listing, PriceHistory
 from app.services.scraper import ScraperService
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,9 @@ def refresh_active_listings():
         logger.info("Starting refresh_active_listings job (execution_id=%d)", execution.id)
 
         # Get all active listings
-        active_listings = get_listings(db, status="active", limit=1000)
+        active_listings = get_listings(
+            db, status="active", limit=settings.scheduler_job_listing_limit
+        )
         logger.info("Found %d active listings to refresh", len(active_listings))
 
         updated_count = 0
@@ -100,59 +104,67 @@ def scrape_competitor_prices():
         logger.info("Starting scrape_competitor_prices job (execution_id=%d)", execution.id)
 
         # Get all active listings
-        active_listings = get_listings(db, status="active", limit=1000)
+        active_listings = get_listings(
+            db, status="active", limit=settings.scheduler_job_listing_limit
+        )
         logger.info("Found %d active listings to scrape competitors for", len(active_listings))
 
         scraper = ScraperService()
-        total_competitors = 0
-        error_count = 0
 
-        for listing in active_listings:
-            try:
-                # Build search query from listing data
-                search_query = listing.title or ""
-                if listing.brand:
-                    search_query = f"{listing.brand} {search_query}".strip()
+        async def process_listings() -> tuple[int, int]:
+            total_competitors_inner = 0
+            error_count_inner = 0
 
-                if not search_query:
-                    logger.warning("Listing %d has no title/brand, skipping", listing.id)
-                    continue
+            for listing in active_listings:
+                try:
+                    # Build search query from listing data
+                    search_query = listing.title or ""
+                    if listing.brand:
+                        search_query = f"{listing.brand} {search_query}".strip()
 
-                logger.info(
-                    "Searching competitors for listing %d: %s", listing.id, search_query
-                )
+                    if not search_query:
+                        logger.warning("Listing %d has no title/brand, skipping", listing.id)
+                        continue
 
-                # Find similar items
-                similar_items = asyncio.run(
-                    scraper.find_similar_items(
+                    logger.info(
+                        "Searching competitors for listing %d: %s", listing.id, search_query
+                    )
+
+                    # Find similar items
+                    similar_items = await scraper.find_similar_items(
                         search_query=search_query,
                         category=listing.category,
                         brand=listing.brand,
                         max_results=10,
                     )
-                )
 
-                # Store competitor prices
-                for item in similar_items:
-                    create_competitor_price(
-                        db=db,
-                        listing_id=listing.id,
-                        platform=item.platform,
-                        competitor_url=item.url,
-                        competitor_title=item.title,
-                        price=item.price,
-                        similarity_score=item.similarity_score,
+                    # Store competitor prices
+                    for item in similar_items:
+                        create_competitor_price(
+                            db=db,
+                            listing_id=listing.id,
+                            platform=item.platform,
+                            competitor_url=item.url,
+                            competitor_title=item.title,
+                            price=item.price,
+                            similarity_score=item.similarity_score,
+                        )
+                        total_competitors_inner += 1
+
+                    logger.info(
+                        "Found %d competitors for listing %d", len(similar_items), listing.id
                     )
-                    total_competitors += 1
 
-                logger.info(
-                    "Found %d competitors for listing %d", len(similar_items), listing.id
-                )
+                except Exception as e:
+                    logger.error(
+                        "Failed to scrape competitors for listing %d: %s", listing.id, e
+                    )
+                    error_count_inner += 1
+                    continue
 
-            except Exception as e:
-                logger.error("Failed to scrape competitors for listing %d: %s", listing.id, e)
-                error_count += 1
-                continue
+            return total_competitors_inner, error_count_inner
+
+        total_competitors, error_count = asyncio.run(process_listings())
 
         result = {
             "total_listings": len(active_listings),
@@ -190,8 +202,6 @@ def cleanup_old_data():
         logger.info("Deleted %d old competitor prices", competitor_deleted)
 
         # Delete old price history (>90 days)
-        from app.models import PriceHistory
-
         cutoff_date = datetime.utcnow() - timedelta(days=90)
         price_history_deleted = (
             db.query(PriceHistory)
@@ -202,8 +212,6 @@ def cleanup_old_data():
         logger.info("Deleted %d old price history entries", price_history_deleted)
 
         # Delete removed listings (>30 days)
-        from app.models import Listing
-
         removed_cutoff = datetime.utcnow() - timedelta(days=30)
         listings_deleted = (
             db.query(Listing)

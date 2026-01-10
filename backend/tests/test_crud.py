@@ -8,7 +8,6 @@ import pytest
 from app.crud import (
     create_competitor_price,
     create_job_execution,
-    create_listing,
     create_price_history,
     delete_old_competitor_prices,
     get_competitor_prices,
@@ -46,12 +45,11 @@ class TestPriceHistoryCRUD:
 
     def test_create_price_history(self, mock_db):
         """Test creating price history entry."""
-        mock_price_history = PriceHistory(id=1, listing_id=1, price=100.0)
         mock_db.add.return_value = None
         mock_db.commit.return_value = None
         mock_db.refresh.side_effect = lambda x: setattr(x, "id", 1)
 
-        result = create_price_history(mock_db, listing_id=1, price=100.0)
+        create_price_history(mock_db, listing_id=1, price=100.0)
 
         assert mock_db.add.called
         assert mock_db.commit.called
@@ -105,7 +103,7 @@ class TestCompetitorPriceCRUD:
         mock_db.commit.return_value = None
         mock_db.refresh.side_effect = lambda x: setattr(x, "id", 1)
 
-        result = create_competitor_price(
+        create_competitor_price(
             db=mock_db,
             listing_id=1,
             platform="olx",
@@ -195,7 +193,7 @@ class TestJobExecutionCRUD:
         mock_db.commit.return_value = None
         mock_db.refresh.side_effect = lambda x: setattr(x, "id", 1)
 
-        result = create_job_execution(
+        create_job_execution(
             mock_db, job_id="refresh_listings", job_name="Refresh active listings"
         )
 
