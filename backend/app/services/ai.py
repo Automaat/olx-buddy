@@ -1,10 +1,12 @@
 """AI service for description generation using multiple providers."""
 
 import base64
+import ipaddress
 import json
 import logging
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -13,6 +15,57 @@ from openai import AsyncOpenAI
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_url(url: str) -> None:
+    """Validate URL to prevent SSRF attacks.
+
+    Args:
+        url: URL to validate
+
+    Raises:
+        ValueError: If URL is invalid or targets private/internal network
+    """
+    parsed = urlparse(url)
+
+    # Only allow HTTP/HTTPS
+    if parsed.scheme not in ("http", "https"):
+        msg = f"Invalid URL scheme: {parsed.scheme}"
+        raise ValueError(msg)
+
+    # Get hostname
+    hostname = parsed.hostname
+    if not hostname:
+        msg = "Invalid URL: no hostname"
+        raise ValueError(msg)
+
+    # Block localhost
+    if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
+        msg = "Access to localhost is not allowed"
+        raise ValueError(msg)
+
+    # Try to resolve hostname to IP and check if it's private
+    try:
+        # Check if hostname is already an IP address
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            msg = f"Access to private IP address is not allowed: {ip}"
+            raise ValueError(msg)
+    except ValueError:
+        # Not an IP address, check for cloud metadata endpoints
+        blocked_domains = [
+            "169.254.169.254",  # AWS/Azure/GCP metadata
+            "metadata.google.internal",
+            "metadata",
+        ]
+        hostname_lower = hostname.lower()
+        is_blocked = any(
+            hostname_lower == domain or hostname_lower.endswith(f".{domain}")
+            for domain in blocked_domains
+        )
+        if is_blocked:
+            msg = f"Access to metadata endpoint is not allowed: {hostname}"
+            raise ValueError(msg) from None
 
 
 class AIService:
@@ -37,7 +90,28 @@ class AIService:
             logger.info("Ollama base URL configured: %s", self.ollama_base_url)
 
     async def suggest_category(self, image_paths: list[str], language: str = "pl") -> str:
-        """Suggest category from images."""
+        """Suggest an item category based on the provided images.
+
+        This method builds a language-specific prompt and queries the configured
+        AI providers in sequence (OpenAI → Anthropic → Ollama) until one
+        successfully returns a response.
+
+        Args:
+            image_paths: List of file system paths to images that should be
+                analyzed to infer the item category.
+            language: Language code used to formulate the prompt. Currently
+                "pl" generates a Polish prompt; any other value generates an
+                English prompt. Defaults to "pl".
+
+        Returns:
+            A single category name (one word) that belongs to the configured
+            set of supported categories (SUPPORTED_CATEGORIES). If no provider
+            returns a valid category, or the response cannot be validated, the
+            method falls back to returning "other".
+
+        Raises:
+            RuntimeError: If no AI provider is available or all providers fail.
+        """
         categories_list = ", ".join(SUPPORTED_CATEGORIES)
 
         if language == "pl":
@@ -81,7 +155,12 @@ Respond with ONLY the category name (one word), without any additional explanati
     def _extract_category(self, response: str) -> str:
         """Extract and validate category from AI response."""
         # Clean response and get first word
-        category = response.strip().lower().split()[0]
+        cleaned = response.strip().lower()
+        parts = cleaned.split()
+        if not parts:
+            # If response is empty or only whitespace, default to "other"
+            return "other"
+        category = parts[0]
         # Remove any punctuation
         category = "".join(c for c in category if c.isalnum() or c == "_")
 
@@ -93,10 +172,42 @@ Respond with ONLY the category name (one word), without any additional explanati
         return "other"
 
     async def extract_from_url(self, url: str, language: str = "pl") -> dict[str, Any]:
-        """Extract product information from URL."""
+        """Extract product information from a product page URL.
+
+        Args:
+            url: Public HTTP/HTTPS URL of the product page to analyze.
+            language: Two-letter language code (for example, "pl" or "en") that controls
+                the language of the AI prompt and, where possible, the returned text.
+
+        Returns:
+            dict[str, Any]: A dictionary containing structured product data extracted
+            from the page. The dictionary typically includes the following keys:
+
+                - "title" (str | None): Human-readable product name.
+                - "description" (str | None): Detailed or marketing description of the
+                  product.
+                - "category" (str | None): Predicted product category identifier.
+                - "price" (float | int | None): Numeric price of the product, if it can
+                  be determined.
+                - "currency" (str | None): Currency code for the price (for example,
+                  "PLN", "EUR"), if available.
+                - "images" (list[str]): List of image URLs associated with the product.
+
+            Additional provider-specific keys may be present depending on the AI
+            response and extraction logic.
+
+        Raises:
+            ValueError: If the HTTP request to ``url`` fails or the response status is
+                not successful, or if URL validation fails (SSRF protection).
+            RuntimeError: If no AI provider is available to process the request or all
+                configured providers fail.
+        """
+        # Validate URL to prevent SSRF
+        _validate_url(url)
+
         try:
             # Fetch webpage content
-            async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
                 response = await client.get(
                     url,
                     headers={
@@ -222,62 +333,28 @@ Respond with ONLY valid JSON, no additional explanations."""
             return {}
 
     async def _generate_text_with_openai(self, prompt: str) -> str:
-        """Generate text using OpenAI."""
-        if not self.openai_client:
-            msg = "OpenAI client not initialized"
-            raise RuntimeError(msg)
+        """Generate text using OpenAI.
 
-        response = await self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1000,
-        )
-        return response.choices[0].message.content or ""
+        This is a thin wrapper around the more general `_generate_with_openai`
+        helper, which centralizes the OpenAI provider logic (including
+        optional image handling).
+        """
+        # Delegate to the unified OpenAI generation method with higher token limit for text-only
+        return await self._generate_with_openai(prompt=prompt, image_paths=[], max_tokens=1000)
 
     async def _generate_text_with_anthropic(self, prompt: str) -> str:
-        """Generate text using Anthropic Claude."""
-        if not self.anthropic_api_key:
-            msg = "Anthropic API key not configured"
-            raise RuntimeError(msg)
+        """Generate text using Anthropic Claude.
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": self.anthropic_api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": "claude-3-5-sonnet-20241022",
-                    "max_tokens": 1000,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["content"][0]["text"]
+        Delegate to the shared Anthropic implementation to avoid duplicated logic.
+        """
+        return await self._generate_with_anthropic(prompt=prompt, image_paths=[], max_tokens=1000)
 
     async def _generate_text_with_ollama(self, prompt: str) -> str:
-        """Generate text using local Ollama model."""
-        if not self.ollama_base_url:
-            msg = "Ollama base URL not configured"
-            raise RuntimeError(msg)
+        """Generate text using local Ollama model.
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.ollama_base_url}/api/generate",
-                json={
-                    "model": "llama3.2",
-                    "prompt": prompt,
-                    "stream": False,
-                },
-                timeout=60.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("response", "")
+        Delegate to the shared Ollama implementation to avoid duplicated logic.
+        """
+        return await self._generate_with_ollama(prompt=prompt, image_paths=[])
 
     async def generate_description(
         self,
@@ -328,8 +405,11 @@ Respond with ONLY valid JSON, no additional explanations."""
 
     async def _fetch_url_context(self, url: str) -> str:
         """Fetch and parse product page content for context."""
+        # Validate URL to prevent SSRF
+        _validate_url(url)
+
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
                 response = await client.get(
                     url,
                     headers={
@@ -387,15 +467,29 @@ Respond with ONLY valid JSON, no additional explanations."""
 
         return base_prompt
 
-    async def _generate_with_openai(self, prompt: str, image_paths: list[str]) -> str:
-        """Generate description using OpenAI GPT-4V."""
+    async def _generate_with_openai(
+        self,
+        prompt: str,
+        image_paths: list[str] | None = None,
+        max_tokens: int = 500,
+    ) -> str:
+        """Generate text/description using OpenAI GPT-4V.
+
+        Args:
+            prompt: Text prompt for the AI
+            image_paths: Optional list of image paths to include in request
+            max_tokens: Maximum tokens for response (default 500)
+        """
         if not self.openai_client:
             msg = "OpenAI client not initialized"
             raise RuntimeError(msg)
 
+        if image_paths is None:
+            image_paths = []
+
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
 
-        # Add images
+        # Add images if provided
         for image_path in image_paths[:4]:  # Limit to 4 images
             image_data = self._load_image_base64(image_path)
             content.append(
@@ -411,20 +505,34 @@ Respond with ONLY valid JSON, no additional explanations."""
         response = await self.openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": content}],
-            max_tokens=500,
+            max_tokens=max_tokens,
         )
 
         return response.choices[0].message.content or ""
 
-    async def _generate_with_anthropic(self, prompt: str, image_paths: list[str]) -> str:
-        """Generate description using Anthropic Claude."""
+    async def _generate_with_anthropic(
+        self,
+        prompt: str,
+        image_paths: list[str] | None = None,
+        max_tokens: int = 500,
+    ) -> str:
+        """Generate text/description using Anthropic Claude.
+
+        Args:
+            prompt: Text prompt for the AI
+            image_paths: Optional list of image paths to include in request
+            max_tokens: Maximum tokens for response (default 500)
+        """
         if not self.anthropic_api_key:
             msg = "Anthropic API key not configured"
             raise RuntimeError(msg)
 
+        if image_paths is None:
+            image_paths = []
+
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
 
-        # Add images
+        # Add images if provided
         for image_path in image_paths[:4]:
             image_data = self._load_image_base64(image_path)
             content.append(
@@ -448,7 +556,7 @@ Respond with ONLY valid JSON, no additional explanations."""
                 },
                 json={
                     "model": "claude-3-5-sonnet-20241022",
-                    "max_tokens": 500,
+                    "max_tokens": max_tokens,
                     "messages": [{"role": "user", "content": content}],
                 },
                 timeout=30.0,
@@ -457,24 +565,40 @@ Respond with ONLY valid JSON, no additional explanations."""
             data = response.json()
             return data["content"][0]["text"]
 
-    async def _generate_with_ollama(self, prompt: str, image_paths: list[str]) -> str:
-        """Generate description using local Ollama model."""
+    async def _generate_with_ollama(
+        self,
+        prompt: str,
+        image_paths: list[str] | None = None,
+    ) -> str:
+        """Generate text/description using local Ollama model.
+
+        Args:
+            prompt: Text prompt for the AI
+            image_paths: Optional list of image paths to include in request
+        """
         if not self.ollama_base_url:
             msg = "Ollama base URL not configured"
             raise RuntimeError(msg)
 
-        # Ollama vision models (llama3.2-vision)
-        images = [self._load_image_base64(path) for path in image_paths[:4]]
+        if image_paths is None:
+            image_paths = []
+
+        # Choose model based on whether images are provided
+        model = "llama3.2-vision" if image_paths else "llama3.2"
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+        }
+
+        # Add images if provided
+        if image_paths:
+            payload["images"] = [self._load_image_base64(path) for path in image_paths[:4]]
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.ollama_base_url}/api/generate",
-                json={
-                    "model": "llama3.2-vision",
-                    "prompt": prompt,
-                    "images": images,
-                    "stream": False,
-                },
+                json=payload,
                 timeout=60.0,
             )
             response.raise_for_status()
@@ -501,7 +625,7 @@ Respond with ONLY valid JSON, no additional explanations."""
 
 # Category-specific prompt templates - English
 CATEGORY_PROMPTS_EN = {
-    "womens_fashion": """Generate engaging marketplace listing for women's fashion.
+    "womens_fashion": """Generate an engaging listing description for women's fashion item.
 
 Brand: {brand}
 Condition: {condition}
@@ -583,7 +707,7 @@ Condition: {condition}
 
 Focus on: Title, author, edition, condition, language, format.
 Informative tone. Specific about condition. Max 200 words.""",
-    "beauty_health": """Generate engaging marketplace listing for beauty/health.
+    "beauty_health": """Generate an engaging listing description for beauty/health product.
 
 Brand: {brand}
 Condition: {condition}
@@ -597,14 +721,14 @@ Condition: {condition}
 
 Focus on: Make/model compatibility, condition, specifications, installation.
 Technical, precise tone. Include details. Max 200 words.""",
-    "animals_pet_supplies": """Generate engaging listing for pet supply/animal.
+    "animals_pet_supplies": """Generate an engaging listing description for pet supply/animal.
 
 Brand: {brand}
 Condition: {condition}
 
 Focus on: Type, age appropriateness, safety, condition, size/capacity.
 Caring, informative tone. Max 200 words.""",
-    "music_instruments": """Generate engaging listing for musical instrument.
+    "music_instruments": """Generate an engaging listing description for musical instrument.
 
 Brand: {brand}
 Condition: {condition}

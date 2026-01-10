@@ -96,7 +96,12 @@
       <div class="result-section">
         <h3>Category</h3>
         <div class="category-box">
-          {{ result.category.replace('_', ' ') }}
+          {{ result.category
+            .replace(/_/g, ' ')
+            .replace(/\bwomens\b/i, "Women's")
+            .replace(/\bmens\b/i, "Men's")
+            .replace(/\b\w/g, (c: string) => c.toUpperCase())
+          }}
         </div>
       </div>
 
