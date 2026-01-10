@@ -193,9 +193,7 @@ class TestJobExecutionCRUD:
         mock_db.commit.return_value = None
         mock_db.refresh.side_effect = lambda x: setattr(x, "id", 1)
 
-        create_job_execution(
-            mock_db, job_id="refresh_listings", job_name="Refresh active listings"
-        )
+        create_job_execution(mock_db, job_id="refresh_listings", job_name="Refresh active listings")
 
         assert mock_db.add.called
         assert mock_db.commit.called

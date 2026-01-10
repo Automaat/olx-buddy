@@ -45,10 +45,11 @@ class TestRefreshActiveListings:
             Listing(id=2, platform="vinted", url="http://vinted.com/test2", title="Test 2"),
         ]
 
-        with patch("app.scheduler.create_job_execution") as mock_create, \
-             patch("app.scheduler.get_listings") as mock_get, \
-             patch("app.scheduler.update_job_execution") as mock_update:
-
+        with (
+            patch("app.scheduler.create_job_execution") as mock_create,
+            patch("app.scheduler.get_listings") as mock_get,
+            patch("app.scheduler.update_job_execution") as mock_update,
+        ):
             mock_create.return_value = mock_execution
             mock_get.return_value = mock_listings
 
@@ -84,10 +85,11 @@ class TestRefreshActiveListings:
             started_at=datetime.utcnow(),
         )
 
-        with patch("app.scheduler.create_job_execution") as mock_create, \
-             patch("app.scheduler.get_listings") as mock_get, \
-             patch("app.scheduler.update_job_execution") as mock_update:
-
+        with (
+            patch("app.scheduler.create_job_execution") as mock_create,
+            patch("app.scheduler.get_listings") as mock_get,
+            patch("app.scheduler.update_job_execution") as mock_update,
+        ):
             mock_create.return_value = mock_execution
             mock_get.side_effect = Exception("Database error")
 
@@ -95,9 +97,7 @@ class TestRefreshActiveListings:
             refresh_active_listings()
 
             # Verify error handling
-            mock_update.assert_called_once_with(
-                mock_db, 1, "error", error_message="Database error"
-            )
+            mock_update.assert_called_once_with(mock_db, 1, "error", error_message="Database error")
             mock_db.close.assert_called_once()
 
 
@@ -129,12 +129,13 @@ class TestScrapeCompetitorPrices:
             price = 2000.0
             similarity_score = 0.85
 
-        with patch("app.scheduler.create_job_execution") as mock_create, \
-             patch("app.scheduler.get_listings") as mock_get, \
-             patch("app.scheduler.ScraperService") as mock_scraper_cls, \
-             patch("app.scheduler.create_competitor_price") as mock_create_price, \
-             patch("app.scheduler.update_job_execution") as mock_update:
-
+        with (
+            patch("app.scheduler.create_job_execution") as mock_create,
+            patch("app.scheduler.get_listings") as mock_get,
+            patch("app.scheduler.ScraperService") as mock_scraper_cls,
+            patch("app.scheduler.create_competitor_price") as mock_create_price,
+            patch("app.scheduler.update_job_execution") as mock_update,
+        ):
             mock_create.return_value = mock_execution
             mock_get.return_value = [mock_listing]
 
@@ -184,12 +185,13 @@ class TestScrapeCompetitorPrices:
             brand=None,
         )
 
-        with patch("app.scheduler.create_job_execution") as mock_create, \
-             patch("app.scheduler.get_listings") as mock_get, \
-             patch("app.scheduler.ScraperService"), \
-             patch("app.scheduler.create_competitor_price") as mock_create_price, \
-             patch("app.scheduler.update_job_execution") as mock_update:
-
+        with (
+            patch("app.scheduler.create_job_execution") as mock_create,
+            patch("app.scheduler.get_listings") as mock_get,
+            patch("app.scheduler.ScraperService"),
+            patch("app.scheduler.create_competitor_price") as mock_create_price,
+            patch("app.scheduler.update_job_execution") as mock_update,
+        ):
             mock_create.return_value = mock_execution
             mock_get.return_value = [mock_listing]
 
@@ -236,10 +238,11 @@ class TestCleanupOldData:
 
         mock_db.query.side_effect = query_side_effect
 
-        with patch("app.scheduler.create_job_execution") as mock_create, \
-             patch("app.scheduler.delete_old_competitor_prices") as mock_delete_comp, \
-             patch("app.scheduler.update_job_execution") as mock_update:
-
+        with (
+            patch("app.scheduler.create_job_execution") as mock_create,
+            patch("app.scheduler.delete_old_competitor_prices") as mock_delete_comp,
+            patch("app.scheduler.update_job_execution") as mock_update,
+        ):
             mock_create.return_value = mock_execution
             mock_delete_comp.return_value = 100
 
@@ -276,10 +279,11 @@ class TestCleanupOldData:
             started_at=datetime.utcnow(),
         )
 
-        with patch("app.scheduler.create_job_execution") as mock_create, \
-             patch("app.scheduler.delete_old_competitor_prices") as mock_delete, \
-             patch("app.scheduler.update_job_execution") as mock_update:
-
+        with (
+            patch("app.scheduler.create_job_execution") as mock_create,
+            patch("app.scheduler.delete_old_competitor_prices") as mock_delete,
+            patch("app.scheduler.update_job_execution") as mock_update,
+        ):
             mock_create.return_value = mock_execution
             mock_delete.side_effect = Exception("Cleanup failed")
 
@@ -287,7 +291,5 @@ class TestCleanupOldData:
             cleanup_old_data()
 
             # Verify error handling
-            mock_update.assert_called_once_with(
-                mock_db, 3, "error", error_message="Cleanup failed"
-            )
+            mock_update.assert_called_once_with(mock_db, 3, "error", error_message="Cleanup failed")
             mock_db.close.assert_called_once()

@@ -156,9 +156,7 @@ def scrape_competitor_prices():
                     )
 
                 except Exception as e:
-                    logger.error(
-                        "Failed to scrape competitors for listing %d: %s", listing.id, e
-                    )
+                    logger.error("Failed to scrape competitors for listing %d: %s", listing.id, e)
                     error_count_inner += 1
                     continue
 

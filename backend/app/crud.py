@@ -135,9 +135,7 @@ def create_competitor_price(
     return db_competitor_price
 
 
-def get_competitor_prices(
-    db: Session, listing_id: int, limit: int = 50
-) -> list[CompetitorPrice]:
+def get_competitor_prices(db: Session, listing_id: int, limit: int = 50) -> list[CompetitorPrice]:
     """Get competitor prices for a listing."""
     return (
         db.query(CompetitorPrice)
