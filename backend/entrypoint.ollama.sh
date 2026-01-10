@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+echo "Installing curl..."
+apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
+
 echo "Starting Ollama service..."
 ollama serve &
 OLLAMA_PID=$!
