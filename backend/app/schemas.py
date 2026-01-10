@@ -121,3 +121,105 @@ class CategoryResponse(BaseModel):
     """Schema for category list response."""
 
     categories: list[str]
+
+
+# Analytics Schemas
+class AnalyticsSummaryResponse(BaseModel):
+    """Schema for analytics summary response."""
+
+    total_listings: int
+    active_listings: int
+    sold_listings: int
+    total_revenue: float
+    avg_sale_price: float
+    total_profit: float
+    inventory_value: float
+
+
+class SalesOverTimeItem(BaseModel):
+    """Schema for sales over time item."""
+
+    period: str
+    sales_count: int
+    revenue: float
+
+
+class ListingsCreatedOverTimeItem(BaseModel):
+    """Schema for listings created over time item."""
+
+    period: str
+    listings_count: int
+
+
+class SalesOverTimeResponse(BaseModel):
+    """Schema for sales over time response."""
+
+    sales: list[SalesOverTimeItem]
+    listings_created: list[ListingsCreatedOverTimeItem]
+
+
+class CategoryStatsItem(BaseModel):
+    """Schema for category stats item."""
+
+    category: str
+    sales_count: int
+    total_revenue: float
+
+
+class BrandStatsItem(BaseModel):
+    """Schema for brand stats item."""
+
+    brand: str
+    sales_count: int
+    total_revenue: float
+
+
+class ProfitableItemStats(BaseModel):
+    """Schema for profitable item stats."""
+
+    id: int
+    title: str | None
+    category: str | None
+    brand: str | None
+    sale_price: float
+    initial_cost: float
+    profit: float
+
+
+class FastSellingItemStats(BaseModel):
+    """Schema for fast-selling item stats."""
+
+    id: int
+    title: str | None
+    category: str | None
+    brand: str | None
+    posted_at: str | None
+    sold_at: str | None
+    days_to_sell: float | None
+
+
+class BestSellersResponse(BaseModel):
+    """Schema for best sellers response."""
+
+    best_categories: list[CategoryStatsItem]
+    best_brands: list[BrandStatsItem]
+    most_profitable: list[ProfitableItemStats]
+    fastest_selling: list[FastSellingItemStats]
+
+
+class InventoryCategoryItem(BaseModel):
+    """Schema for inventory category item."""
+
+    category: str
+    total_value: float
+    items_count: int
+    avg_price: float
+
+
+class InventoryValueResponse(BaseModel):
+    """Schema for inventory value response."""
+
+    total_value: float
+    total_items: int
+    avg_time_to_sell_days: float | None
+    by_category: list[InventoryCategoryItem]
