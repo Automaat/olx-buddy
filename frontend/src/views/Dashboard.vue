@@ -28,7 +28,9 @@
     <div v-else class="listings-grid">
       <div v-for="listing in listings" :key="listing.id" class="listing-card">
         <div class="listing-header">
-          <h3>{{ listing.title || 'No title' }}</h3>
+          <router-link :to="`/listing/${listing.id}`" class="listing-title">
+            <h3>{{ listing.title || 'No title' }}</h3>
+          </router-link>
           <span class="badge" :class="listing.status">{{ listing.status }}</span>
         </div>
 
@@ -264,10 +266,20 @@ h1 {
   gap: 1rem;
 }
 
+.listing-title {
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+}
+
+.listing-title:hover h3 {
+  color: #42b983;
+}
+
 .listing-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  flex: 1;
+  transition: color 0.2s;
 }
 
 .badge {

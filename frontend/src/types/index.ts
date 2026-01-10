@@ -47,3 +47,79 @@ export interface ImageUploadResponse {
 }
 
 export type ItemCondition = 'new' | 'like_new' | 'good' | 'fair' | 'poor'
+
+export interface AnalyticsSummary {
+  total_revenue: number
+  total_profit: number
+  total_cost: number
+  total_inventory_value: number
+  active_listings_count: number
+  sold_listings_count: number
+  avg_sale_price: number
+  negative_profit_count: number
+}
+
+export interface SalesDataPoint {
+  date: string
+  revenue: number
+  listings_sold: number
+  listings_created: number
+}
+
+export interface CategoryStat {
+  category: string
+  revenue: number
+  count: number
+}
+
+export interface BrandStat {
+  brand: string
+  revenue: number
+  count: number
+}
+
+export interface TopItem {
+  listing_id: number
+  title: string
+  revenue: number
+  profit: number
+  days_to_sell: number
+}
+
+export interface InventoryBreakdown {
+  category: string
+  total_value: number
+  count: number
+  avg_price: number
+}
+
+export interface CompetitorPrice {
+  id: number
+  source_platform: string
+  competitor_url: string
+  competitor_price: number
+  currency: string
+  similarity_score: number
+  title: string
+  checked_at: string
+}
+
+export interface PriceHistoryPoint {
+  date: string
+  price: number
+}
+
+export interface ScheduledJob {
+  id: string
+  name: string
+  next_run_time: string | null
+  trigger: string
+}
+
+export interface JobExecution {
+  job_id: string
+  run_time: string
+  success: boolean
+  error?: string
+  result?: any
+}

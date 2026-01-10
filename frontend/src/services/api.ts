@@ -4,6 +4,16 @@ import type {
   AddListingRequest,
   GenerateDescriptionResponse,
   ImageUploadResponse,
+  AnalyticsSummary,
+  SalesDataPoint,
+  CategoryStat,
+  BrandStat,
+  TopItem,
+  InventoryBreakdown,
+  CompetitorPrice,
+  PriceHistoryPoint,
+  ScheduledJob,
+  JobExecution,
 } from '../types'
 
 const api = axios.create({
@@ -94,6 +104,76 @@ export const generateApi = {
   async getCategories(): Promise<string[]> {
     const response = await api.get('/generate/categories')
     return response.data.categories
+  },
+}
+
+export const analyticsApi = {
+  async getSummary(): Promise<AnalyticsSummary> {
+    const response = await api.get('/analytics/summary')
+    return response.data
+  },
+
+  async getSalesOverTime(params?: {
+    start_date?: string
+    end_date?: string
+    granularity?: 'day' | 'week' | 'month'
+  }): Promise<SalesDataPoint[]> {
+    const response = await api.get('/analytics/sales-over-time', { params })
+    return response.data
+  },
+
+  async getBestSellers(params?: {
+    start_date?: string
+    end_date?: string
+    limit?: number
+  }): Promise<{
+    top_categories: CategoryStat[]
+    top_brands: BrandStat[]
+    most_profitable: TopItem[]
+    fastest_selling: TopItem[]
+  }> {
+    const response = await api.get('/analytics/best-sellers', { params })
+    return response.data
+  },
+
+  async getInventoryValue(): Promise<InventoryBreakdown[]> {
+    const response = await api.get('/analytics/inventory-value')
+    return response.data
+  },
+
+  async getPriceMonitoring(listingId: number): Promise<CompetitorPrice[]> {
+    const response = await api.get(`/analytics/price-monitoring/${listingId}`)
+    return response.data
+  },
+
+  async getPriceHistory(listingId: number): Promise<PriceHistoryPoint[]> {
+    const response = await api.get(`/analytics/price-monitoring/${listingId}/history`)
+    return response.data
+  },
+}
+
+export const schedulerApi = {
+  async getJobs(): Promise<ScheduledJob[]> {
+    const response = await api.get('/scheduler/jobs')
+    return response.data
+  },
+
+  async getJobHistory(jobId: string): Promise<JobExecution[]> {
+    const response = await api.get(`/scheduler/jobs/${jobId}/history`)
+    return response.data
+  },
+
+  async getAllHistory(params?: {
+    limit?: number
+    success_only?: boolean
+  }): Promise<JobExecution[]> {
+    const response = await api.get('/scheduler/history', { params })
+    return response.data
+  },
+
+  async runJob(jobId: string): Promise<{ message: string }> {
+    const response = await api.post(`/scheduler/jobs/${jobId}/run`)
+    return response.data
   },
 }
 

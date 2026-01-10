@@ -7,6 +7,8 @@
           <router-link to="/">Dashboard</router-link>
           <router-link to="/add-listing">Add Listing</router-link>
           <router-link to="/generate-description">Generate Description</router-link>
+          <router-link to="/analytics">Analytics</router-link>
+          <router-link to="/scheduler">Scheduler</router-link>
         </div>
       </div>
     </nav>
