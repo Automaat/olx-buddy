@@ -1,5 +1,7 @@
 """API routes for analytics and reporting."""
 
+from typing import cast
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -102,20 +104,34 @@ async def price_monitoring(
     Returns competitor prices sorted by most recent.
     """
     competitor_prices = crud.get_competitor_prices(db, listing_id, limit=limit)
-    return {
-        "listing_id": listing_id,
-        "competitor_prices": [
+
+    prices_list = []
+    for cp in competitor_prices:
+        price_val = 0.0
+        price = cast(float | None, cp.price)
+        if price is not None:
+            price_val = float(price)
+
+        similarity_val = 0.0
+        similarity = cast(float | None, cp.similarity_score)
+        if similarity is not None:
+            similarity_val = float(similarity)
+
+        prices_list.append(
             {
                 "id": cp.id,
                 "platform": cp.platform,
                 "competitor_url": cp.competitor_url,
                 "competitor_title": cp.competitor_title,
-                "price": float(cp.price or 0),
-                "similarity_score": float(cp.similarity_score or 0),
+                "price": price_val,
+                "similarity_score": similarity_val,
                 "scraped_at": cp.scraped_at.isoformat(),
             }
-            for cp in competitor_prices
-        ],
+        )
+
+    return {
+        "listing_id": listing_id,
+        "competitor_prices": prices_list,
     }
 
 
@@ -134,14 +150,19 @@ async def price_history(
     Returns price history sorted by most recent.
     """
     price_history = crud.get_price_history(db, listing_id, limit=limit)
-    return {
-        "listing_id": listing_id,
-        "price_history": [
+
+    history_list = []
+    for ph in price_history:
+        price = cast(float, ph.price)
+        history_list.append(
             {
                 "id": ph.id,
-                "price": float(ph.price),
+                "price": float(price),
                 "recorded_at": ph.recorded_at.isoformat(),
             }
-            for ph in price_history
-        ],
+        )
+
+    return {
+        "listing_id": listing_id,
+        "price_history": history_list,
     }

@@ -1,6 +1,6 @@
 """Analytics service for sales and inventory insights."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -55,7 +55,7 @@ def get_analytics_summary(db: Session) -> dict:
 
 def get_sales_over_time(db: Session, period: str = "daily", days: int = 30) -> list[dict]:
     """Get sales over time grouped by period."""
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
     # Determine grouping based on period
     if period == "daily":
@@ -94,7 +94,7 @@ def get_listings_created_over_time(
     db: Session, period: str = "daily", days: int = 30
 ) -> list[dict]:
     """Get listings created over time grouped by period."""
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
     # Determine grouping based on period
     if period == "daily":
@@ -279,7 +279,9 @@ def get_inventory_value(db: Session) -> dict:
         .first()
     )
 
-    avg_days = round(avg_time_to_sell.avg_days, 1) if avg_time_to_sell.avg_days else None
+    avg_days = None
+    if avg_time_to_sell and avg_time_to_sell.avg_days is not None:
+        avg_days = round(float(avg_time_to_sell.avg_days), 1)
 
     return {
         "total_value": float(total_value.total_value or 0),
