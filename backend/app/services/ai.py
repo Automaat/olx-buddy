@@ -44,28 +44,35 @@ def _validate_url(url: str) -> None:
         msg = "Access to localhost is not allowed"
         raise ValueError(msg)
 
-    # Try to resolve hostname to IP and check if it's private
+    # Try to check if hostname is an IP address
     try:
-        # Check if hostname is already an IP address
         ip = ipaddress.ip_address(hostname)
+        # If it's an IP, check if it's private/loopback/link-local
         if ip.is_private or ip.is_loopback or ip.is_link_local:
             msg = f"Access to private IP address is not allowed: {ip}"
             raise ValueError(msg)
-    except ValueError:
-        # Not an IP address, check for cloud metadata endpoints
-        blocked_domains = [
-            "169.254.169.254",  # AWS/Azure/GCP metadata
-            "metadata.google.internal",
-            "metadata",
-        ]
-        hostname_lower = hostname.lower()
-        is_blocked = any(
-            hostname_lower == domain or hostname_lower.endswith(f".{domain}")
-            for domain in blocked_domains
-        )
-        if is_blocked:
-            msg = f"Access to metadata endpoint is not allowed: {hostname}"
-            raise ValueError(msg) from None
+        # Valid public IP, allow it
+        return
+    except ValueError as e:
+        # If the error is from our security check, re-raise it
+        if "not allowed" in str(e):
+            raise
+        # Otherwise it's not a valid IP address, continue to domain checks
+
+    # Not an IP address, check for cloud metadata endpoints
+    blocked_domains = [
+        "169.254.169.254",  # AWS/Azure/GCP metadata
+        "metadata.google.internal",
+        "metadata",
+    ]
+    hostname_lower = hostname.lower()
+    is_blocked = any(
+        hostname_lower == domain or hostname_lower.endswith(f".{domain}")
+        for domain in blocked_domains
+    )
+    if is_blocked:
+        msg = f"Access to metadata endpoint is not allowed: {hostname}"
+        raise ValueError(msg)
 
 
 class AIService:

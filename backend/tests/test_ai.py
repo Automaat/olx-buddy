@@ -599,7 +599,9 @@ class TestExtractFromURL:
 
             call_args = ai_service_with_openai.openai_client.chat.completions.create.call_args
             messages = call_args[1]["messages"]
-            prompt = messages[0]["content"]
+            content = messages[0]["content"]
+            # Content is now a list with text/image objects
+            prompt = content[0]["text"] if isinstance(content, list) else content
             assert "przeanalizuj" in prompt.lower() or "wyodrębnij" in prompt.lower()
 
     @pytest.mark.asyncio
