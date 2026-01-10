@@ -35,7 +35,7 @@
             <strong>Sale Price:</strong>
             <span>{{ formatCurrency(listing.sale_price) }}</span>
           </div>
-          <div v-if="listing.sale_price && listing.initial_cost" class="detail-item">
+          <div v-if="listing.sale_price && listing.initial_cost && profit !== undefined" class="detail-item">
             <strong>Profit:</strong>
             <span :class="{ negative: profit < 0 }">{{ formatCurrency(profit) }}</span>
           </div>
@@ -79,16 +79,18 @@
       <!-- Price History Chart -->
       <div v-if="priceHistory.length > 0" class="price-history-section">
         <h2>Price History</h2>
-        <div class="price-chart">
+        <div class="price-chart" role="group" aria-label="Price history chart showing price changes over time">
           <div
             v-for="(point, index) in priceHistory"
             :key="index"
             class="price-point"
             :style="{ height: `${(point.price / maxPrice) * 100}%` }"
             :title="`${point.date}: ${formatCurrency(point.price)}`"
+            role="img"
+            :aria-label="`Price on ${formatDate(point.date)} was ${formatCurrency(point.price)}`"
           >
-            <div class="point-label">{{ formatShortDate(point.date) }}</div>
-            <div class="point-value">{{ formatCurrency(point.price) }}</div>
+            <div class="point-label" aria-hidden="true">{{ formatShortDate(point.date) }}</div>
+            <div class="point-value" aria-hidden="true">{{ formatCurrency(point.price) }}</div>
           </div>
         </div>
       </div>
@@ -124,9 +126,9 @@
     </div>
 
     <!-- Edit Modal -->
-    <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
-      <div class="modal">
-        <h3>Edit Listing</h3>
+    <div v-if="showEditModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+        <h3 id="edit-modal-title">Edit Listing</h3>
         <form @submit.prevent="saveListing">
           <div class="form-group">
             <label for="title">Title</label>
@@ -190,7 +192,7 @@
             <button type="submit" class="btn-primary" :disabled="saving">
               {{ saving ? 'Saving...' : 'Save' }}
             </button>
-            <button type="button" @click="showEditModal = false" class="btn-secondary">
+            <button type="button" @click="closeModal" class="btn-secondary">
               Cancel
             </button>
           </div>
@@ -230,10 +232,36 @@ const editForm = ref({
   status: 'active',
 })
 
-const profit = computed(() => {
-  if (!listing.value?.sale_price || !listing.value?.initial_cost) return 0
+const profit = computed<number | undefined>(() => {
+  if (listing.value?.sale_price == null || listing.value?.initial_cost == null) {
+    return undefined
+  }
   return listing.value.sale_price - listing.value.initial_cost
 })
+
+const hasUnsavedChanges = computed(() => {
+  if (!listing.value) return false
+  return (
+    editForm.value.title !== (listing.value.title || '') ||
+    editForm.value.description !== (listing.value.description || '') ||
+    editForm.value.price !== (listing.value.price || 0) ||
+    editForm.value.initial_cost !== (listing.value.initial_cost || 0) ||
+    editForm.value.category !== (listing.value.category || '') ||
+    editForm.value.brand !== (listing.value.brand || '') ||
+    editForm.value.condition !== (listing.value.condition || '') ||
+    editForm.value.size !== (listing.value.size || '') ||
+    editForm.value.status !== listing.value.status
+  )
+})
+
+const closeModal = () => {
+  if (hasUnsavedChanges.value) {
+    if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+      return
+    }
+  }
+  showEditModal.value = false
+}
 
 const maxPrice = computed(() => {
   if (priceHistory.value.length === 0) return 1
@@ -241,7 +269,7 @@ const maxPrice = computed(() => {
 })
 
 const formatCurrency = (value: number | undefined): string => {
-  if (!value) return 'N/A'
+  if (value === undefined || value === null) return 'N/A'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'EUR',
@@ -281,8 +309,14 @@ const loadListing = async () => {
   try {
     const [listingData, competitors, history] = await Promise.all([
       listingsApi.getById(listingId),
-      analyticsApi.getPriceMonitoring(listingId).catch(() => []),
-      analyticsApi.getPriceHistory(listingId).catch(() => []),
+      analyticsApi.getPriceMonitoring(listingId).catch(() => {
+        toast.error('Failed to load competitor prices')
+        return []
+      }),
+      analyticsApi.getPriceHistory(listingId).catch(() => {
+        toast.error('Failed to load price history')
+        return []
+      }),
     ])
 
     listing.value = listingData
@@ -309,6 +343,26 @@ const loadListing = async () => {
 
 const saveListing = async () => {
   if (!listing.value) return
+
+  if (!editForm.value.title || editForm.value.title.trim().length === 0) {
+    toast.error('Title is required')
+    return
+  }
+
+  if (editForm.value.title.length > 200) {
+    toast.error('Title must be 200 characters or less')
+    return
+  }
+
+  if (editForm.value.price != null && editForm.value.price < 0) {
+    toast.error('Price must be a positive number')
+    return
+  }
+
+  if (editForm.value.initial_cost != null && editForm.value.initial_cost < 0) {
+    toast.error('Initial cost must be a positive number')
+    return
+  }
 
   saving.value = true
   try {

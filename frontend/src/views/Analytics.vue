@@ -55,7 +55,7 @@
         </div>
         <div class="chart-container">
           <div v-if="salesData.length === 0" class="empty">No sales data available</div>
-          <div v-else class="simple-chart">
+          <div v-else class="simple-chart" role="group" aria-label="Sales over time chart showing revenue by period">
             <div
               v-for="(point, index) in salesData"
               :key="index"
@@ -64,9 +64,11 @@
                 height: `${(point.revenue / maxRevenue) * 100}%`,
               }"
               :title="`${point.date}: ${formatCurrency(point.revenue)}`"
+              role="img"
+              :aria-label="`Revenue for ${formatDate(point.date)} was ${formatCurrency(point.revenue)}`"
             >
-              <div class="bar-label">{{ formatDate(point.date) }}</div>
-              <div class="bar-value">{{ formatCurrency(point.revenue) }}</div>
+              <div class="bar-label" aria-hidden="true">{{ formatDate(point.date) }}</div>
+              <div class="bar-value" aria-hidden="true">{{ formatCurrency(point.revenue) }}</div>
             </div>
           </div>
         </div>
@@ -158,6 +160,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
+import { useToast } from 'vue-toastification'
 import { analyticsApi } from '../services/api'
 import type {
   AnalyticsSummary,
@@ -167,6 +170,8 @@ import type {
   TopItem,
   InventoryBreakdown,
 } from '../types'
+
+const toast = useToast()
 
 const loading = ref(true)
 const error = ref('')
@@ -246,7 +251,7 @@ watch(granularity, async () => {
   try {
     salesData.value = await analyticsApi.getSalesOverTime({ granularity: granularity.value })
   } catch (err) {
-    error.value = 'Failed to load sales data'
+    toast.error('Failed to load sales data')
   }
 })
 
