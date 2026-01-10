@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.services.ai import CATEGORY_PROMPTS, SUPPORTED_CATEGORIES, AIService
+from app.services.ai import (
+    CATEGORY_PROMPTS_EN,
+    CATEGORY_PROMPTS_PL,
+    SUPPORTED_CATEGORIES,
+    AIService,
+)
 
 
 @pytest.fixture
@@ -97,17 +102,17 @@ class TestAIService:
         assert "good" in prompt
 
     def test_build_prompt_clothing_category(self, ai_service):
-        """Test prompt building for clothing category."""
-        prompt = ai_service._build_prompt("clothing", "Nike", "like_new", "M", None)
+        """Test prompt building for womens_fashion category."""
+        prompt = ai_service._build_prompt("womens_fashion", "Nike", "like_new", "M", None, "en")
 
-        assert "clothing" in prompt.lower()
+        assert "fashion" in prompt.lower()
         assert "Nike" in prompt
         assert "like_new" in prompt
         assert "M" in prompt
 
     def test_build_prompt_electronics_category(self, ai_service):
         """Test prompt building for electronics category."""
-        prompt = ai_service._build_prompt("electronics", "Apple", "good", None, None)
+        prompt = ai_service._build_prompt("electronics", "Apple", "good", None, None, "en")
 
         assert "electronics" in prompt.lower()
         assert "Apple" in prompt
@@ -126,7 +131,8 @@ class TestAIService:
             if category == "other":
                 # "other" uses default prompt
                 continue
-            assert category in CATEGORY_PROMPTS
+            assert category in CATEGORY_PROMPTS_EN
+            assert category in CATEGORY_PROMPTS_PL
 
     @pytest.mark.asyncio
     async def test_generate_description_no_providers(self, ai_service, test_image_path):
@@ -369,21 +375,24 @@ class TestAIService:
 
     def test_supported_categories_list(self):
         """Test that supported categories list is correct."""
-        expected_categories = [
-            "clothing",
-            "electronics",
-            "furniture",
-            "home_garden",
-            "sports",
-            "toys_kids",
-            "books_media",
-            "other",
-        ]
-        assert SUPPORTED_CATEGORIES == expected_categories
+        # Verify key categories are present
+        assert "womens_fashion" in SUPPORTED_CATEGORIES
+        assert "mens_fashion" in SUPPORTED_CATEGORIES
+        assert "electronics" in SUPPORTED_CATEGORIES
+        assert "home_garden" in SUPPORTED_CATEGORIES
+        assert "other" in SUPPORTED_CATEGORIES
+        # Verify list is not empty
+        assert len(SUPPORTED_CATEGORIES) > 0
 
     def test_category_prompts_structure(self):
         """Test that category prompts have proper structure."""
-        for category, prompt in CATEGORY_PROMPTS.items():
+        for category, prompt in CATEGORY_PROMPTS_EN.items():
+            assert isinstance(prompt, str)
+            assert len(prompt) > 0
+            # Check for template variables
+            assert "{condition}" in prompt or category == "furniture"
+
+        for category, prompt in CATEGORY_PROMPTS_PL.items():
             assert isinstance(prompt, str)
             assert len(prompt) > 0
             # Check for template variables

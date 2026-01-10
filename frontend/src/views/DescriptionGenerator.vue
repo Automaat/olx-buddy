@@ -4,6 +4,17 @@
 
     <form @submit.prevent="handleSubmit" class="form">
       <div class="form-group">
+        <label for="product-url">Product URL (optional)</label>
+        <input
+          id="product-url"
+          v-model="form.product_url"
+          type="url"
+          placeholder="https://example.com/product"
+        />
+        <small class="help-text">AI will extract technical details from this URL to enhance the description</small>
+      </div>
+
+      <div class="form-group">
         <label for="photo-upload">Upload Photos (max 10) *</label>
         <input
           id="photo-upload"
@@ -23,12 +34,10 @@
       </div>
 
       <div class="form-group">
-        <label for="category">Category *</label>
-        <select id="category" v-model="form.category" required :disabled="loadingCategories">
-          <option value="">Select category</option>
-          <option v-for="cat in categories" :key="cat" :value="cat">
-            {{ cat.replace('_', ' ') }}
-          </option>
+        <label for="language">Language *</label>
+        <select id="language" v-model="form.language" required>
+          <option value="pl">Polish</option>
+          <option value="en">English</option>
         </select>
       </div>
 
@@ -85,6 +94,13 @@
       <h2>Generated Description</h2>
 
       <div class="result-section">
+        <h3>Category</h3>
+        <div class="category-box">
+          {{ result.category.replace('_', ' ') }}
+        </div>
+      </div>
+
+      <div class="result-section">
         <h3>Description</h3>
         <div class="description-box">
           {{ result.description }}
@@ -126,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useToast } from 'vue-toastification'
 import { generateApi } from '../services/api'
 import type { GenerateDescriptionResponse } from '../types'
@@ -135,33 +151,21 @@ const toast = useToast()
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const form = ref({
-  category: '',
+  product_url: '',
   brand: '',
   condition: '',
   size: '',
   additional_details: '',
   include_price_suggestion: true,
+  language: 'pl',
 })
 
 const selectedFiles = ref<File[]>([])
 const uploadedPaths = ref<string[]>([])
-const categories = ref<string[]>([])
 const loading = ref(false)
 const uploadingImages = ref(false)
-const loadingCategories = ref(false)
 const error = ref('')
 const result = ref<GenerateDescriptionResponse | null>(null)
-
-const loadCategories = async () => {
-  loadingCategories.value = true
-  try {
-    categories.value = await generateApi.getCategories()
-  } catch (err) {
-    error.value = 'Failed to load categories'
-  } finally {
-    loadingCategories.value = false
-  }
-}
 
 const handleFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -203,8 +207,9 @@ const handleSubmit = async () => {
 
   try {
     result.value = await generateApi.generateDescription({
-      category: form.value.category,
       image_paths: uploadedPaths.value.join(','),
+      language: form.value.language,
+      product_url: form.value.product_url || undefined,
       brand: form.value.brand || undefined,
       condition: form.value.condition || undefined,
       size: form.value.size || undefined,
@@ -233,8 +238,6 @@ const copyToClipboard = async (text: string) => {
     toast.error('Failed to copy to clipboard')
   }
 }
-
-onMounted(loadCategories)
 </script>
 
 <style scoped>
@@ -268,6 +271,7 @@ h1 {
 }
 
 .form-group input[type='text'],
+.form-group input[type='url'],
 .form-group input[type='file'],
 .form-group select,
 .form-group textarea {
@@ -276,6 +280,13 @@ h1 {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+}
+
+.help-text {
+  display: block;
+  color: #6c757d;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
 }
 
 .form-group input[type='checkbox'] {
@@ -371,6 +382,15 @@ h1 {
   margin-top: 0;
   margin-bottom: 1rem;
   color: #333;
+}
+
+.category-box {
+  padding: 0.5rem 1rem;
+  background: #e3f2fd;
+  border-radius: 4px;
+  font-weight: 600;
+  color: #1976d2;
+  text-transform: capitalize;
 }
 
 .description-box {

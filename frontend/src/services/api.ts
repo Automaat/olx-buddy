@@ -4,6 +4,7 @@ import type {
   AddListingRequest,
   GenerateDescriptionResponse,
   ImageUploadResponse,
+  ExtractFromURLResponse,
   AnalyticsSummary,
   SalesDataPoint,
   CategoryStat,
@@ -78,8 +79,10 @@ export const generateApi = {
   },
 
   async generateDescription(data: {
-    category: string
     image_paths: string
+    language?: string
+    product_url?: string
+    category?: string
     brand?: string
     condition?: string
     size?: string
@@ -104,6 +107,11 @@ export const generateApi = {
   async getCategories(): Promise<string[]> {
     const response = await api.get('/generate/categories')
     return response.data.categories
+  },
+
+  async extractFromURL(url: string): Promise<ExtractFromURLResponse> {
+    const response = await api.post('/generate/extract-from-url', { url })
+    return response.data
   },
 }
 

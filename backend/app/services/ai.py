@@ -1,11 +1,13 @@
 """AI service for description generation using multiple providers."""
 
 import base64
+import json
 import logging
 from pathlib import Path
 from typing import Any
 
 import httpx
+from bs4 import BeautifulSoup
 from openai import AsyncOpenAI
 
 from app.config import settings
@@ -34,6 +36,249 @@ class AIService:
             self.ollama_base_url = settings.ollama_base_url
             logger.info("Ollama base URL configured: %s", self.ollama_base_url)
 
+    async def suggest_category(self, image_paths: list[str], language: str = "pl") -> str:
+        """Suggest category from images."""
+        categories_list = ", ".join(SUPPORTED_CATEGORIES)
+
+        if language == "pl":
+            prompt = f"""Przeanalizuj zdjęcia i określ kategorię przedmiotu.
+
+Dostępne kategorie: {categories_list}
+
+Odpowiedz TYLKO nazwą kategorii (jednym słowem), bez żadnych dodatkowych wyjaśnień."""
+        else:
+            prompt = f"""Analyze the images and determine the item category.
+
+Available categories: {categories_list}
+
+Respond with ONLY the category name (one word), without any additional explanations."""
+
+        # Try providers in order: OpenAI -> Anthropic -> Ollama
+        if self.openai_client:
+            try:
+                response = await self._generate_with_openai(prompt, image_paths)
+                return self._extract_category(response)
+            except Exception as e:
+                logger.warning("OpenAI category suggestion failed: %s", e)
+
+        if self.anthropic_api_key:
+            try:
+                response = await self._generate_with_anthropic(prompt, image_paths)
+                return self._extract_category(response)
+            except Exception as e:
+                logger.warning("Anthropic category suggestion failed: %s", e)
+
+        if self.ollama_base_url:
+            try:
+                response = await self._generate_with_ollama(prompt, image_paths)
+                return self._extract_category(response)
+            except Exception as e:
+                logger.warning("Ollama category suggestion failed: %s", e)
+
+        msg = "No AI provider available or all providers failed"
+        raise RuntimeError(msg)
+
+    def _extract_category(self, response: str) -> str:
+        """Extract and validate category from AI response."""
+        # Clean response and get first word
+        category = response.strip().lower().split()[0]
+        # Remove any punctuation
+        category = "".join(c for c in category if c.isalnum() or c == "_")
+
+        # Validate against supported categories
+        if category in SUPPORTED_CATEGORIES:
+            return category
+
+        # If not found, return "other"
+        return "other"
+
+    async def extract_from_url(self, url: str, language: str = "pl") -> dict[str, Any]:
+        """Extract product information from URL."""
+        try:
+            # Fetch webpage content
+            async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+                response = await client.get(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    },
+                )
+                response.raise_for_status()
+                html_content = response.text
+
+            # Parse HTML
+            soup = BeautifulSoup(html_content, "html.parser")
+
+            # Remove script and style elements
+            for script in soup(["script", "style", "nav", "footer", "header"]):
+                script.decompose()
+
+            # Get text content
+            text_content = soup.get_text(separator="\n", strip=True)
+            # Limit content size
+            text_content = text_content[:10000]
+
+            # Extract images
+            images = []
+            for img in soup.find_all("img", src=True)[:10]:
+                img_url = img["src"]
+                if img_url.startswith("http"):
+                    images.append(img_url)
+
+            # Use AI to extract structured information
+            if language == "pl":
+                prompt = f"""Przeanalizuj treść strony produktu i wyodrębnij info w JSON.
+
+Treść strony:
+{text_content}
+
+Wyodrębnij następujące informacje (jeśli dostępne):
+- title: nazwa produktu
+- brand: marka
+- description: opis produktu (krótki, max 200 słów)
+- price: cena (tylko liczba, bez waluty)
+- currency: waluta (PLN, EUR, USD, etc.)
+- category: kategoria z listy: {", ".join(SUPPORTED_CATEGORIES)}
+- condition: stan (new, like_new, good, fair, poor)
+- size: rozmiar
+- specifications: kluczowe specyfikacje jako obiekt
+
+Odpowiedz TYLKO poprawnym JSON-em bez dodatkowych wyjaśnień."""
+            else:
+                prompt = f"""Analyze product page content and extract information in JSON format.
+
+Page content:
+{text_content}
+
+Extract the following information (if available):
+- title: product name
+- brand: brand name
+- description: product description (brief, max 200 words)
+- price: price (number only, no currency)
+- currency: currency code (PLN, EUR, USD, etc.)
+- category: category from: {", ".join(SUPPORTED_CATEGORIES)}
+- condition: condition (new, like_new, good, fair, poor)
+- size: size
+- specifications: key specifications as object
+
+Respond with ONLY valid JSON, no additional explanations."""
+
+            # Try providers in order
+            extracted_text = None
+            if self.openai_client:
+                try:
+                    extracted_text = await self._generate_text_with_openai(prompt)
+                except Exception as e:
+                    logger.warning("OpenAI extraction failed: %s", e)
+
+            if not extracted_text and self.anthropic_api_key:
+                try:
+                    extracted_text = await self._generate_text_with_anthropic(prompt)
+                except Exception as e:
+                    logger.warning("Anthropic extraction failed: %s", e)
+
+            if not extracted_text and self.ollama_base_url:
+                try:
+                    extracted_text = await self._generate_text_with_ollama(prompt)
+                except Exception as e:
+                    logger.warning("Ollama extraction failed: %s", e)
+
+            if not extracted_text:
+                msg = "No AI provider available"
+                raise RuntimeError(msg)
+
+            # Parse JSON response
+            extracted_data = self._parse_json_response(extracted_text)
+            extracted_data["images"] = images
+
+            return extracted_data
+
+        except httpx.HTTPError as e:
+            logger.error("Failed to fetch URL: %s", e)
+            raise ValueError(f"Failed to fetch URL: {e}") from e
+        except Exception as e:
+            logger.error("URL extraction failed: %s", e)
+            raise
+
+    def _parse_json_response(self, response: str) -> dict[str, Any]:
+        """Parse JSON from AI response, handling markdown code blocks."""
+        # Remove markdown code blocks
+        response = response.strip()
+        if response.startswith("```"):
+            # Find the actual JSON content
+            lines = response.split("\n")
+            start_idx = 1  # Skip first ```
+            end_idx = len(lines) - 1  # Skip last ```
+            for i, line in enumerate(lines):
+                if i > 0 and line.startswith("```"):
+                    end_idx = i
+                    break
+            response = "\n".join(lines[start_idx:end_idx])
+
+        try:
+            return json.loads(response)
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse JSON, returning empty dict")
+            return {}
+
+    async def _generate_text_with_openai(self, prompt: str) -> str:
+        """Generate text using OpenAI."""
+        if not self.openai_client:
+            msg = "OpenAI client not initialized"
+            raise RuntimeError(msg)
+
+        response = await self.openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1000,
+        )
+        return response.choices[0].message.content or ""
+
+    async def _generate_text_with_anthropic(self, prompt: str) -> str:
+        """Generate text using Anthropic Claude."""
+        if not self.anthropic_api_key:
+            msg = "Anthropic API key not configured"
+            raise RuntimeError(msg)
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": self.anthropic_api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 1000,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["content"][0]["text"]
+
+    async def _generate_text_with_ollama(self, prompt: str) -> str:
+        """Generate text using local Ollama model."""
+        if not self.ollama_base_url:
+            msg = "Ollama base URL not configured"
+            raise RuntimeError(msg)
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.ollama_base_url}/api/generate",
+                json={
+                    "model": "llama3.2",
+                    "prompt": prompt,
+                    "stream": False,
+                },
+                timeout=60.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("response", "")
+
     async def generate_description(
         self,
         category: str,
@@ -42,9 +287,22 @@ class AIService:
         condition: str | None = None,
         size: str | None = None,
         additional_details: str | None = None,
+        language: str = "pl",
+        product_url: str | None = None,
     ) -> str:
         """Generate compelling description from images and item details."""
-        prompt = self._build_prompt(category, brand, condition, size, additional_details)
+        # Fetch product details from URL if provided
+        url_context = ""
+        if product_url:
+            try:
+                url_context = await self._fetch_url_context(product_url)
+            except Exception as e:
+                logger.warning("Failed to fetch URL context: %s", e)
+                # Continue without URL context
+
+        prompt = self._build_prompt(
+            category, brand, condition, size, additional_details, language, url_context
+        )
 
         # Try providers in order: OpenAI -> Anthropic -> Ollama
         if self.openai_client:
@@ -68,6 +326,35 @@ class AIService:
         msg = "No AI provider available or all providers failed"
         raise RuntimeError(msg)
 
+    async def _fetch_url_context(self, url: str) -> str:
+        """Fetch and parse product page content for context."""
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+                response = await client.get(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    },
+                )
+                response.raise_for_status()
+                html_content = response.text
+
+            # Parse HTML
+            soup = BeautifulSoup(html_content, "html.parser")
+
+            # Remove script and style elements
+            for script in soup(["script", "style", "nav", "footer", "header"]):
+                script.decompose()
+
+            # Get text content
+            text_content = soup.get_text(separator=" ", strip=True)
+            # Limit context size to 3000 chars
+            return text_content[:3000]
+
+        except Exception as e:
+            logger.warning("Failed to fetch URL context: %s", e)
+            return ""
+
     def _build_prompt(
         self,
         category: str,
@@ -75,16 +362,28 @@ class AIService:
         condition: str | None,
         size: str | None,
         additional_details: str | None,
+        language: str = "pl",
+        url_context: str = "",
     ) -> str:
         """Build category-specific prompt for description generation."""
-        base_prompt = CATEGORY_PROMPTS.get(category, CATEGORY_PROMPTS["default"]).format(
+        prompt_dict = CATEGORY_PROMPTS_PL if language == "pl" else CATEGORY_PROMPTS_EN
+        base_prompt = prompt_dict.get(category, prompt_dict["default"]).format(
             brand=brand or "unknown",
             condition=condition or "good",
             size=size or "",
         )
 
         if additional_details:
-            base_prompt += f"\n\nAdditional details: {additional_details}"
+            details_prefix = "Dodatkowe szczegóły:" if language == "pl" else "Additional details:"
+            base_prompt += f"\n\n{details_prefix} {additional_details}"
+
+        if url_context:
+            if language == "pl":
+                context_prefix = "Info z oryginalnej strony (użyj do wzbogacenia o szczegóły):"
+            else:
+                context_prefix = "Info from product page (use to enrich with details):"
+
+            base_prompt += f"\n\n{context_prefix}\n{url_context}"
 
         return base_prompt
 
@@ -200,125 +499,281 @@ class AIService:
             return base64.b64encode(f.read()).decode("utf-8")
 
 
-# Category-specific prompt templates
-CATEGORY_PROMPTS = {
-    "clothing": """Generate an engaging marketplace listing description for clothing item.
+# Category-specific prompt templates - English
+CATEGORY_PROMPTS_EN = {
+    "womens_fashion": """Generate engaging marketplace listing for women's fashion.
 
 Brand: {brand}
 Condition: {condition}
 Size: {size}
 
-Focus on:
-- Material and fabric quality
-- Fit and style
-- Brand reputation
-- Condition details
-- Care instructions if visible
+Focus on: Material, fit, style, brand reputation, condition details, care instructions.
+Write in casual, friendly tone. SEO-friendly. Max 200 words.""",
+    "mens_fashion": """Generate an engaging marketplace listing description for men's fashion item.
 
-Write in casual, friendly tone. Make it SEO-friendly with relevant keywords. Max 200 words.""",
+Brand: {brand}
+Condition: {condition}
+Size: {size}
+
+Focus on: Material, fit, style, brand, condition, care instructions.
+Write in casual, friendly tone. SEO-friendly. Max 200 words.""",
+    "kids_clothing": """Generate an engaging marketplace listing description for kids' clothing.
+
+Brand: {brand}
+Condition: {condition}
+Size: {size}
+
+Focus on: Material, comfort, size/age, condition, safety, brand.
+Warm, friendly tone. Mention safety. Max 200 words.""",
+    "shoes": """Generate an engaging marketplace listing description for shoes.
+
+Brand: {brand}
+Condition: {condition}
+Size: {size}
+
+Focus on: Brand, size, condition (sole wear, material), style, comfort features.
+Casual tone. Include specific measurements. Max 200 words.""",
+    "bags_accessories": """Generate an engaging marketplace listing description for bag/accessory.
+
+Brand: {brand}
+Condition: {condition}
+
+Focus on: Brand, material, dimensions, condition, features (pockets, compartments), style.
+Descriptive, friendly tone. Max 200 words.""",
+    "jewelry_watches": """Generate an engaging marketplace listing description for jewelry/watch.
+
+Brand: {brand}
+Condition: {condition}
+
+Focus on: Material, brand, condition, features, style, authenticity markers.
+Elegant, precise tone. Max 200 words.""",
     "electronics": """Generate an engaging marketplace listing description for electronics.
 
 Brand: {brand}
 Condition: {condition}
 
-Focus on:
-- Technical specifications
-- Features and capabilities
-- Condition (scratches, battery health, etc.)
-- What's included (accessories, box, charger)
-- Original purchase date if known
-
-Write clearly and precisely. Include relevant technical keywords. Max 200 words.""",
-    "furniture": """Generate an engaging marketplace listing description for furniture.
-
-Condition: {condition}
-Dimensions: {size}
-
-Focus on:
-- Materials and construction
-- Dimensions and measurements
-- Condition (scratches, stains, wear)
-- Style and design
-- Assembly requirements
-
-Write descriptively. Mention dimensions prominently. Max 200 words.""",
+Focus on: Specifications, features, condition, included accessories, purchase date.
+Clear, technical tone. Include keywords. Max 200 words.""",
     "home_garden": """Generate an engaging marketplace listing description for home & garden item.
 
 Brand: {brand}
 Condition: {condition}
 
-Focus on:
-- Functionality and features
-- Materials and quality
-- Condition and wear
-- Usage instructions
-- Brand if notable
-
-Write clearly. Emphasize practical benefits. Max 200 words.""",
-    "sports": """Generate an engaging marketplace listing description for sports equipment.
+Focus on: Functionality, materials, condition, usage instructions, benefits.
+Practical tone. Emphasize features. Max 200 words.""",
+    "sports_hobby": """Generate an engaging marketplace listing description for sports/hobby item.
 
 Brand: {brand}
 Condition: {condition}
 Size: {size}
 
-Focus on:
-- Type and specifications
-- Brand and quality
-- Condition and usage level
-- Size/fit information
-- Performance features
-
-Write enthusiastically. Include sport-specific keywords. Max 200 words.""",
-    "toys_kids": """Generate an engaging marketplace listing description for toys/kids items.
+Focus on: Type, brand, condition, usage level, specifications, performance.
+Enthusiastic tone. Sport-specific keywords. Max 200 words.""",
+    "toys_games": """Generate an engaging marketplace listing description for toy/game.
 
 Brand: {brand}
 Condition: {condition}
 
-Focus on:
-- Age appropriateness
-- Educational/entertainment value
-- Safety and condition
-- Brand and quality
-- What's included
-
-Write warmly and clearly. Mention safety. Max 200 words.""",
-    "books_media": """Generate an engaging marketplace listing description for books/media.
+Focus on: Age appropriateness, educational value, safety, condition, completeness.
+Warm, clear tone. Mention safety. Max 200 words.""",
+    "books_media": """Generate an engaging marketplace listing description for book/media.
 
 Brand: {brand}
 Condition: {condition}
 
-Focus on:
-- Title, author, edition
-- Condition (pages, cover, marks)
-- Content overview (no spoilers)
-- Language
-- Format (hardcover, paperback, etc.)
+Focus on: Title, author, edition, condition, language, format.
+Informative tone. Specific about condition. Max 200 words.""",
+    "beauty_health": """Generate engaging marketplace listing for beauty/health.
 
-Write informatively. Be specific about condition. Max 200 words.""",
+Brand: {brand}
+Condition: {condition}
+
+Focus on: Brand, product type, usage, expiry date, quantity remaining, benefits.
+Clean, honest tone. Safety info. Max 200 words.""",
+    "vehicles_parts": """Generate an engaging marketplace listing description for vehicle/part.
+
+Brand: {brand}
+Condition: {condition}
+
+Focus on: Make/model compatibility, condition, specifications, installation.
+Technical, precise tone. Include details. Max 200 words.""",
+    "animals_pet_supplies": """Generate engaging listing for pet supply/animal.
+
+Brand: {brand}
+Condition: {condition}
+
+Focus on: Type, age appropriateness, safety, condition, size/capacity.
+Caring, informative tone. Max 200 words.""",
+    "music_instruments": """Generate engaging listing for musical instrument.
+
+Brand: {brand}
+Condition: {condition}
+
+Focus on: Type, brand, condition, specifications, included accessories, sound quality.
+Passionate, technical tone. Max 200 words.""",
+    "collectibles_art": """Generate an engaging marketplace listing description for collectible/art.
+
+Brand: {brand}
+Condition: {condition}
+
+Focus on: Rarity, condition, provenance, materials, dimensions, authenticity.
+Elegant, detailed tone. Max 200 words.""",
     "default": """Generate an engaging marketplace listing description.
 
 Brand: {brand}
 Condition: {condition}
 
-Focus on:
-- Key features and benefits
-- Condition and quality
-- Brand reputation
-- What makes it valuable
-- Any notable characteristics
-
-Write clearly and engagingly. Use relevant keywords. Max 200 words.""",
+Focus on: Key features, condition, quality, brand, value.
+Clear, engaging tone. Use keywords. Max 200 words.""",
 }
 
 
-# Supported categories
+# Category-specific prompt templates - Polish
+CATEGORY_PROMPTS_PL = {
+    "womens_fashion": """Wygeneruj angażujący opis ogłoszenia dla damskiej odzieży.
+
+Marka: {brand}
+Stan: {condition}
+Rozmiar: {size}
+
+Skup się na: Materiał, krój, styl, marka, stan, pielęgnacja.
+Swobodny, przyjazny ton. SEO. Max 200 słów.""",
+    "mens_fashion": """Wygeneruj angażujący opis ogłoszenia dla męskiej odzieży.
+
+Marka: {brand}
+Stan: {condition}
+Rozmiar: {size}
+
+Skup się na: Materiał, krój, styl, marka, stan, pielęgnacja.
+Swobodny, przyjazny ton. SEO. Max 200 słów.""",
+    "kids_clothing": """Wygeneruj angażujący opis ogłoszenia dla dziecięcej odzieży.
+
+Marka: {brand}
+Stan: {condition}
+Rozmiar: {size}
+
+Skup się na: Materiał, wygoda, rozmiar/wiek, stan, bezpieczeństwo, marka.
+Ciepły, przyjazny ton. Bezpieczeństwo. Max 200 słów.""",
+    "shoes": """Wygeneruj angażujący opis ogłoszenia dla obuwia.
+
+Marka: {brand}
+Stan: {condition}
+Rozmiar: {size}
+
+Skup się na: Marka, rozmiar, stan (podeszwa, materiał), styl, wygoda.
+Swobodny ton. Dokładne wymiary. Max 200 słów.""",
+    "bags_accessories": """Wygeneruj angażujący opis ogłoszenia dla torebki/akcesorium.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Marka, materiał, wymiary, stan, funkcje (kieszenie), styl.
+Opisowy, przyjazny ton. Max 200 słów.""",
+    "jewelry_watches": """Wygeneruj angażujący opis ogłoszenia dla biżuterii/zegarka.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Materiał, marka, stan, cechy, styl, autentyczność.
+Elegancki, precyzyjny ton. Max 200 słów.""",
+    "electronics": """Wygeneruj angażujący opis ogłoszenia dla elektroniki.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Specyfikacje, funkcje, stan, akcesoria, data zakupu.
+Jasny, techniczny ton. Słowa kluczowe. Max 200 słów.""",
+    "home_garden": """Wygeneruj angażujący opis ogłoszenia dla przedmiotu dom i ogród.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Funkcjonalność, materiały, stan, instrukcje, korzyści.
+Praktyczny ton. Podkreśl cechy. Max 200 słów.""",
+    "sports_hobby": """Wygeneruj angażujący opis ogłoszenia dla sprzętu sportowego/hobby.
+
+Marka: {brand}
+Stan: {condition}
+Rozmiar: {size}
+
+Skup się na: Typ, marka, stan, poziom użytkowania, specyfikacje, wydajność.
+Entuzjastyczny ton. Słowa kluczowe. Max 200 słów.""",
+    "toys_games": """Wygeneruj angażujący opis ogłoszenia dla zabawki/gry.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Wiek, wartość edukacyjna, bezpieczeństwo, stan, kompletność.
+Ciepły, jasny ton. Bezpieczeństwo. Max 200 słów.""",
+    "books_media": """Wygeneruj angażujący opis ogłoszenia dla książki/mediów.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Tytuł, autor, wydanie, stan, język, format.
+Informacyjny ton. Dokładny stan. Max 200 słów.""",
+    "beauty_health": """Wygeneruj angażujący opis ogłoszenia dla produktu beauty/zdrowie.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Marka, typ, użytkowanie, data ważności, ilość, korzyści.
+Czysty, uczciwy ton. Bezpieczeństwo. Max 200 słów.""",
+    "vehicles_parts": """Wygeneruj angażujący opis ogłoszenia dla pojazdu/części.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Kompatybilność, stan, specyfikacje, montaż.
+Techniczny, precyzyjny ton. Szczegóły. Max 200 słów.""",
+    "animals_pet_supplies": """Wygeneruj angażujący opis ogłoszenia dla akcesoriów zwierzęcych.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Typ, odpowiedniość, bezpieczeństwo, stan, rozmiar/pojemność.
+Troskliwy, informacyjny ton. Max 200 słów.""",
+    "music_instruments": """Wygeneruj angażujący opis ogłoszenia dla instrumentu muzycznego.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Typ, marka, stan, specyfikacje, akcesoria, jakość dźwięku.
+Pasjonujący, techniczny ton. Max 200 słów.""",
+    "collectibles_art": """Wygeneruj angażujący opis ogłoszenia dla kolekcji/sztuki.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Rzadkość, stan, pochodzenie, materiały, wymiary, autentyczność.
+Elegancki, szczegółowy ton. Max 200 słów.""",
+    "default": """Wygeneruj angażujący opis ogłoszenia.
+
+Marka: {brand}
+Stan: {condition}
+
+Skup się na: Kluczowe cechy, stan, jakość, marka, wartość.
+Jasny, angażujący ton. Słowa kluczowe. Max 200 słów.""",
+}
+
+
+# Supported categories (based on Vinted and OLX Poland)
 SUPPORTED_CATEGORIES = [
-    "clothing",
+    "womens_fashion",
+    "mens_fashion",
+    "kids_clothing",
+    "shoes",
+    "bags_accessories",
+    "jewelry_watches",
     "electronics",
-    "furniture",
     "home_garden",
-    "sports",
-    "toys_kids",
+    "sports_hobby",
+    "toys_games",
     "books_media",
+    "beauty_health",
+    "vehicles_parts",
+    "animals_pet_supplies",
+    "music_instruments",
+    "collectibles_art",
     "other",
 ]

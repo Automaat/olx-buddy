@@ -16,6 +16,13 @@ class ItemCondition(str, Enum):
     POOR = "poor"
 
 
+class DescriptionLanguage(str, Enum):
+    """Valid description language values."""
+
+    POLISH = "pl"
+    ENGLISH = "en"
+
+
 class ListingBase(BaseModel):
     """Base schema for listing data."""
 
@@ -101,6 +108,7 @@ class GenerateDescriptionRequest(BaseModel):
 class GenerateDescriptionResponse(BaseModel):
     """Schema for description generation response."""
 
+    category: str
     description: str
     suggested_price: float | None = None
     min_price: float | None = None
@@ -121,6 +129,27 @@ class CategoryResponse(BaseModel):
     """Schema for category list response."""
 
     categories: list[str]
+
+
+class ExtractFromURLRequest(BaseModel):
+    """Schema for extracting product info from URL."""
+
+    url: HttpUrl
+
+
+class ExtractFromURLResponse(BaseModel):
+    """Schema for extracted product information."""
+
+    title: str | None = None
+    brand: str | None = None
+    description: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    category: str | None = None
+    condition: str | None = None
+    size: str | None = None
+    images: list[str] = []
+    specifications: dict | None = None
 
 
 # Analytics Schemas
