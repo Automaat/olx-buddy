@@ -15,30 +15,32 @@ def get_analytics_summary(db: Session) -> dict:
     sold_count = db.query(Listing).filter(Listing.status == "sold").count()
 
     # Revenue and profit (only sold items)
-    sold_items = db.query(
-        func.sum(Listing.sale_price).label("total_revenue"),
-        func.avg(Listing.sale_price).label("avg_sale_price"),
-    ).filter(
-        Listing.status == "sold",
-        Listing.sale_price.isnot(None)
-    ).first()
+    sold_items = (
+        db.query(
+            func.sum(Listing.sale_price).label("total_revenue"),
+            func.avg(Listing.sale_price).label("avg_sale_price"),
+        )
+        .filter(Listing.status == "sold", Listing.sale_price.isnot(None))
+        .first()
+    )
 
     # Calculate total profit
-    profit_query = db.query(
-        func.sum(Listing.sale_price - Listing.initial_cost).label("total_profit")
-    ).filter(
-        Listing.status == "sold",
-        Listing.sale_price.isnot(None),
-        Listing.initial_cost.isnot(None)
-    ).first()
+    profit_query = (
+        db.query(func.sum(Listing.sale_price - Listing.initial_cost).label("total_profit"))
+        .filter(
+            Listing.status == "sold",
+            Listing.sale_price.isnot(None),
+            Listing.initial_cost.isnot(None),
+        )
+        .first()
+    )
 
     # Inventory value (active listings with price)
-    inventory_value = db.query(
-        func.sum(Listing.price).label("total_value")
-    ).filter(
-        Listing.status == "active",
-        Listing.price.isnot(None)
-    ).first()
+    inventory_value = (
+        db.query(func.sum(Listing.price).label("total_value"))
+        .filter(Listing.status == "active", Listing.price.isnot(None))
+        .first()
+    )
 
     return {
         "total_listings": active_count + sold_count,
@@ -51,11 +53,7 @@ def get_analytics_summary(db: Session) -> dict:
     }
 
 
-def get_sales_over_time(
-    db: Session,
-    period: str = "daily",
-    days: int = 30
-) -> list[dict]:
+def get_sales_over_time(db: Session, period: str = "daily", days: int = 30) -> list[dict]:
     """Get sales over time grouped by period."""
     cutoff_date = datetime.utcnow() - timedelta(days=days)
 
@@ -68,15 +66,19 @@ def get_sales_over_time(
     else:  # monthly
         date_format = func.strftime("%Y-%m", Listing.sold_at)
 
-    results = db.query(
-        date_format.label("period"),
-        func.count(Listing.id).label("sales_count"),
-        func.sum(Listing.sale_price).label("revenue"),
-    ).filter(
-        Listing.status == "sold",
-        Listing.sold_at >= cutoff_date,
-        Listing.sold_at.isnot(None)
-    ).group_by("period").order_by("period").all()
+    results = (
+        db.query(
+            date_format.label("period"),
+            func.count(Listing.id).label("sales_count"),
+            func.sum(Listing.sale_price).label("revenue"),
+        )
+        .filter(
+            Listing.status == "sold", Listing.sold_at >= cutoff_date, Listing.sold_at.isnot(None)
+        )
+        .group_by("period")
+        .order_by("period")
+        .all()
+    )
 
     return [
         {
@@ -89,9 +91,7 @@ def get_sales_over_time(
 
 
 def get_listings_created_over_time(
-    db: Session,
-    period: str = "daily",
-    days: int = 30
+    db: Session, period: str = "daily", days: int = 30
 ) -> list[dict]:
     """Get listings created over time grouped by period."""
     cutoff_date = datetime.utcnow() - timedelta(days=days)
@@ -104,12 +104,16 @@ def get_listings_created_over_time(
     else:  # monthly
         date_format = func.strftime("%Y-%m", Listing.created_at)
 
-    results = db.query(
-        date_format.label("period"),
-        func.count(Listing.id).label("listings_count"),
-    ).filter(
-        Listing.created_at >= cutoff_date
-    ).group_by("period").order_by("period").all()
+    results = (
+        db.query(
+            date_format.label("period"),
+            func.count(Listing.id).label("listings_count"),
+        )
+        .filter(Listing.created_at >= cutoff_date)
+        .group_by("period")
+        .order_by("period")
+        .all()
+    )
 
     return [
         {
@@ -123,56 +127,74 @@ def get_listings_created_over_time(
 def get_best_sellers(db: Session, limit: int = 10) -> dict:
     """Get best-selling categories, brands, and items."""
     # Best-selling categories
-    categories = db.query(
-        Listing.category,
-        func.count(Listing.id).label("sales_count"),
-        func.sum(Listing.sale_price).label("total_revenue"),
-    ).filter(
-        Listing.status == "sold",
-        Listing.category.isnot(None)
-    ).group_by(Listing.category).order_by(func.count(Listing.id).desc()).limit(limit).all()
+    categories = (
+        db.query(
+            Listing.category,
+            func.count(Listing.id).label("sales_count"),
+            func.sum(Listing.sale_price).label("total_revenue"),
+        )
+        .filter(Listing.status == "sold", Listing.category.isnot(None))
+        .group_by(Listing.category)
+        .order_by(func.count(Listing.id).desc())
+        .limit(limit)
+        .all()
+    )
 
     # Best-selling brands
-    brands = db.query(
-        Listing.brand,
-        func.count(Listing.id).label("sales_count"),
-        func.sum(Listing.sale_price).label("total_revenue"),
-    ).filter(
-        Listing.status == "sold",
-        Listing.brand.isnot(None)
-    ).group_by(Listing.brand).order_by(func.count(Listing.id).desc()).limit(limit).all()
+    brands = (
+        db.query(
+            Listing.brand,
+            func.count(Listing.id).label("sales_count"),
+            func.sum(Listing.sale_price).label("total_revenue"),
+        )
+        .filter(Listing.status == "sold", Listing.brand.isnot(None))
+        .group_by(Listing.brand)
+        .order_by(func.count(Listing.id).desc())
+        .limit(limit)
+        .all()
+    )
 
     # Most profitable items
-    profitable_items = db.query(
-        Listing.id,
-        Listing.title,
-        Listing.category,
-        Listing.brand,
-        Listing.sale_price,
-        Listing.initial_cost,
-        (Listing.sale_price - Listing.initial_cost).label("profit"),
-    ).filter(
-        Listing.status == "sold",
-        Listing.sale_price.isnot(None),
-        Listing.initial_cost.isnot(None)
-    ).order_by((Listing.sale_price - Listing.initial_cost).desc()).limit(limit).all()
+    profitable_items = (
+        db.query(
+            Listing.id,
+            Listing.title,
+            Listing.category,
+            Listing.brand,
+            Listing.sale_price,
+            Listing.initial_cost,
+            (Listing.sale_price - Listing.initial_cost).label("profit"),
+        )
+        .filter(
+            Listing.status == "sold",
+            Listing.sale_price.isnot(None),
+            Listing.initial_cost.isnot(None),
+        )
+        .order_by((Listing.sale_price - Listing.initial_cost).desc())
+        .limit(limit)
+        .all()
+    )
 
     # Fastest-selling items (shortest time between posted_at and sold_at)
-    fastest_items = db.query(
-        Listing.id,
-        Listing.title,
-        Listing.category,
-        Listing.brand,
-        Listing.posted_at,
-        Listing.sold_at,
-        (func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).label("days_to_sell"),
-    ).filter(
-        Listing.status == "sold",
-        Listing.posted_at.isnot(None),
-        Listing.sold_at.isnot(None)
-    ).order_by(
-        (func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).asc()
-    ).limit(limit).all()
+    fastest_items = (
+        db.query(
+            Listing.id,
+            Listing.title,
+            Listing.category,
+            Listing.brand,
+            Listing.posted_at,
+            Listing.sold_at,
+            (func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).label(
+                "days_to_sell"
+            ),
+        )
+        .filter(
+            Listing.status == "sold", Listing.posted_at.isnot(None), Listing.sold_at.isnot(None)
+        )
+        .order_by((func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).asc())
+        .limit(limit)
+        .all()
+    )
 
     return {
         "best_categories": [
@@ -221,40 +243,43 @@ def get_best_sellers(db: Session, limit: int = 10) -> dict:
 def get_inventory_value(db: Session) -> dict:
     """Get current inventory value breakdown."""
     # Total inventory value
-    total_value = db.query(
-        func.sum(Listing.price).label("total_value"),
-        func.count(Listing.id).label("total_items"),
-    ).filter(
-        Listing.status == "active",
-        Listing.price.isnot(None)
-    ).first()
+    total_value = (
+        db.query(
+            func.sum(Listing.price).label("total_value"),
+            func.count(Listing.id).label("total_items"),
+        )
+        .filter(Listing.status == "active", Listing.price.isnot(None))
+        .first()
+    )
 
     # Breakdown by category
-    by_category = db.query(
-        Listing.category,
-        func.sum(Listing.price).label("total_value"),
-        func.count(Listing.id).label("items_count"),
-        func.avg(Listing.price).label("avg_price"),
-    ).filter(
-        Listing.status == "active",
-        Listing.price.isnot(None),
-        Listing.category.isnot(None)
-    ).group_by(Listing.category).order_by(func.sum(Listing.price).desc()).all()
+    by_category = (
+        db.query(
+            Listing.category,
+            func.sum(Listing.price).label("total_value"),
+            func.count(Listing.id).label("items_count"),
+            func.avg(Listing.price).label("avg_price"),
+        )
+        .filter(Listing.status == "active", Listing.price.isnot(None), Listing.category.isnot(None))
+        .group_by(Listing.category)
+        .order_by(func.sum(Listing.price).desc())
+        .all()
+    )
 
     # Average time to sell (for sold items)
-    avg_time_to_sell = db.query(
-        func.avg(
-            func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)
-        ).label("avg_days")
-    ).filter(
-        Listing.status == "sold",
-        Listing.posted_at.isnot(None),
-        Listing.sold_at.isnot(None)
-    ).first()
-
-    avg_days = (
-        round(avg_time_to_sell.avg_days, 1) if avg_time_to_sell.avg_days else None
+    avg_time_to_sell = (
+        db.query(
+            func.avg(func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).label(
+                "avg_days"
+            )
+        )
+        .filter(
+            Listing.status == "sold", Listing.posted_at.isnot(None), Listing.sold_at.isnot(None)
+        )
+        .first()
     )
+
+    avg_days = round(avg_time_to_sell.avg_days, 1) if avg_time_to_sell.avg_days else None
 
     return {
         "total_value": float(total_value.total_value or 0),
