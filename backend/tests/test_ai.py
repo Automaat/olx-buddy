@@ -999,7 +999,8 @@ class TestURLValidation:
 
     def test_validate_url_aws_metadata(self):
         """Test that AWS metadata endpoint is blocked."""
-        with pytest.raises(ValueError, match="metadata"):
+        # 169.254.169.254 is caught as link-local IP before domain check
+        with pytest.raises(ValueError, match="private IP"):
             _validate_url("http://169.254.169.254/latest/meta-data/")
 
     def test_validate_url_gcp_metadata(self):
