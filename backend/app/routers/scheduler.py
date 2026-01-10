@@ -66,15 +66,19 @@ async def get_job_history(
     executions = get_job_executions(db, job_id=job_id, limit=limit)
 
     return [
-        JobExecutionResponse(
-            id=execution.id,
-            job_id=execution.job_id,
-            job_name=execution.job_name,
-            status=execution.status,
-            started_at=execution.started_at.isoformat(),
-            completed_at=execution.completed_at.isoformat() if execution.completed_at else None,
-            error_message=execution.error_message,
-            result_data=execution.result_data,
+        JobExecutionResponse.model_validate(
+            {
+                "id": execution.id,
+                "job_id": execution.job_id,
+                "job_name": execution.job_name,
+                "status": execution.status,
+                "started_at": execution.started_at.isoformat(),
+                "completed_at": execution.completed_at.isoformat()
+                if execution.completed_at
+                else None,
+                "error_message": execution.error_message,
+                "result_data": execution.result_data,
+            }
         )
         for execution in executions
     ]
@@ -88,15 +92,19 @@ async def get_all_history(
     executions = get_job_executions(db, limit=limit)
 
     return [
-        JobExecutionResponse(
-            id=execution.id,
-            job_id=execution.job_id,
-            job_name=execution.job_name,
-            status=execution.status,
-            started_at=execution.started_at.isoformat(),
-            completed_at=execution.completed_at.isoformat() if execution.completed_at else None,
-            error_message=execution.error_message,
-            result_data=execution.result_data,
+        JobExecutionResponse.model_validate(
+            {
+                "id": execution.id,
+                "job_id": execution.job_id,
+                "job_name": execution.job_name,
+                "status": execution.status,
+                "started_at": execution.started_at.isoformat(),
+                "completed_at": execution.completed_at.isoformat()
+                if execution.completed_at
+                else None,
+                "error_message": execution.error_message,
+                "result_data": execution.result_data,
+            }
         )
         for execution in executions
     ]

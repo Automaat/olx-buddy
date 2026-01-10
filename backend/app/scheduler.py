@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from typing import cast
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -76,13 +77,13 @@ def refresh_active_listings():
             "errors": error_count,
         }
 
-        update_job_execution(db, execution.id, "success", result_data=result)
+        update_job_execution(db, cast(int, execution.id), "success", result_data=result)
         logger.info("Refresh job completed: %s", result)
 
     except Exception as e:
         logger.exception("refresh_active_listings job failed")
         if execution:
-            update_job_execution(db, execution.id, "error", error_message=str(e))
+            update_job_execution(db, cast(int, execution.id), "error", error_message=str(e))
     finally:
         db.close()
 
@@ -118,9 +119,11 @@ def scrape_competitor_prices():
             for listing in active_listings:
                 try:
                     # Build search query from listing data
-                    search_query = listing.title or ""
-                    if listing.brand:
-                        search_query = f"{listing.brand} {search_query}".strip()
+                    title = cast(str | None, listing.title)
+                    brand = cast(str | None, listing.brand)
+                    search_query = title or ""
+                    if brand:
+                        search_query = f"{brand} {search_query}".strip()
 
                     if not search_query:
                         logger.warning("Listing %d has no title/brand, skipping", listing.id)
@@ -133,8 +136,8 @@ def scrape_competitor_prices():
                     # Find similar items
                     similar_items = await scraper.find_similar_items(
                         search_query=search_query,
-                        category=listing.category,
-                        brand=listing.brand,
+                        category=cast(str | None, listing.category),
+                        brand=brand,
                         max_results=10,
                     )
 
@@ -142,7 +145,7 @@ def scrape_competitor_prices():
                     for item in similar_items:
                         create_competitor_price(
                             db=db,
-                            listing_id=listing.id,
+                            listing_id=cast(int, listing.id),
                             platform=item.platform,
                             competitor_url=item.url,
                             competitor_title=item.title,
@@ -170,13 +173,13 @@ def scrape_competitor_prices():
             "errors": error_count,
         }
 
-        update_job_execution(db, execution.id, "success", result_data=result)
+        update_job_execution(db, cast(int, execution.id), "success", result_data=result)
         logger.info("Competitor scraping job completed: %s", result)
 
     except Exception as e:
         logger.exception("scrape_competitor_prices job failed")
         if execution:
-            update_job_execution(db, execution.id, "error", error_message=str(e))
+            update_job_execution(db, cast(int, execution.id), "error", error_message=str(e))
     finally:
         db.close()
 
@@ -226,13 +229,13 @@ def cleanup_old_data():
             "listings_deleted": listings_deleted,
         }
 
-        update_job_execution(db, execution.id, "success", result_data=result)
+        update_job_execution(db, cast(int, execution.id), "success", result_data=result)
         logger.info("Cleanup job completed: %s", result)
 
     except Exception as e:
         logger.exception("cleanup_old_data job failed")
         if execution:
-            update_job_execution(db, execution.id, "error", error_message=str(e))
+            update_job_execution(db, cast(int, execution.id), "error", error_message=str(e))
     finally:
         db.close()
 
