@@ -50,10 +50,46 @@
 
         <div class="listing-actions">
           <a :href="listing.url" target="_blank" class="btn-link">View</a>
-          <button v-if="listing.status === 'active'" @click="markAsSold(listing.id)">
+          <button v-if="listing.status === 'active'" @click="showSoldModal(listing.id)">
             Mark Sold
           </button>
-          <button @click="deleteListing(listing.id)" class="btn-danger">Delete</button>
+          <button @click="showDeleteModal(listing.id)" class="btn-danger">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mark as Sold Modal -->
+    <div v-if="soldModal.show" class="modal-overlay" @click.self="soldModal.show = false">
+      <div class="modal">
+        <h3>Mark as Sold</h3>
+        <div class="form-group">
+          <label for="sale-price">Enter sale price:</label>
+          <input
+            id="sale-price"
+            v-model="soldModal.salePrice"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            @keyup.enter="markAsSold"
+            autofocus
+          />
+        </div>
+        <div class="modal-actions">
+          <button @click="markAsSold" class="btn-primary">Confirm</button>
+          <button @click="soldModal.show = false" class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="deleteModal.show" class="modal-overlay" @click.self="deleteModal.show = false">
+      <div class="modal">
+        <h3>Delete Listing</h3>
+        <p>Are you sure you want to delete this listing?</p>
+        <div class="modal-actions">
+          <button @click="deleteListing" class="btn-danger">Delete</button>
+          <button @click="deleteModal.show = false" class="btn-secondary">Cancel</button>
         </div>
       </div>
     </div>
@@ -62,9 +98,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useToast } from 'vue-toastification'
 import { listingsApi } from '../services/api'
 import type { Listing } from '../types'
 
+const toast = useToast()
 const listings = ref<Listing[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -72,6 +110,17 @@ const error = ref('')
 const filters = ref({
   platform: '',
   status: 'active',
+})
+
+const soldModal = ref({
+  show: false,
+  listingId: null as number | null,
+  salePrice: '',
+})
+
+const deleteModal = ref({
+  show: false,
+  listingId: null as number | null,
 })
 
 const loadListings = async () => {
@@ -90,32 +139,59 @@ const loadListings = async () => {
   }
 }
 
-const markAsSold = async (id: number) => {
-  const salePrice = prompt('Enter sale price:')
-  if (!salePrice) return
+const showSoldModal = (id: number) => {
+  soldModal.value = {
+    show: true,
+    listingId: id,
+    salePrice: '',
+  }
+}
+
+const markAsSold = async () => {
+  const salePriceInput = soldModal.value.salePrice
+  if (!salePriceInput) {
+    soldModal.value.show = false
+    return
+  }
+
+  const salePrice = parseFloat(salePriceInput)
+  if (!Number.isFinite(salePrice) || salePrice <= 0) {
+    toast.error('Please enter a valid positive number for the sale price')
+    return
+  }
 
   try {
-    await listingsApi.markSold(id, {
-      sale_price: parseFloat(salePrice),
+    await listingsApi.markSold(soldModal.value.listingId!, {
+      sale_price: salePrice,
     })
+    soldModal.value.show = false
     await loadListings()
+    toast.success('Listing marked as sold')
   } catch (err) {
-    alert('Failed to mark as sold')
+    toast.error('Failed to mark as sold')
   }
 }
 
-const deleteListing = async (id: number) => {
-  if (!confirm('Are you sure you want to delete this listing?')) return
+const showDeleteModal = (id: number) => {
+  deleteModal.value = {
+    show: true,
+    listingId: id,
+  }
+}
 
+const deleteListing = async () => {
   try {
-    await listingsApi.delete(id)
+    await listingsApi.delete(deleteModal.value.listingId!)
+    deleteModal.value.show = false
     await loadListings()
+    toast.success('Listing deleted')
   } catch (err) {
-    alert('Failed to delete listing')
+    toast.error('Failed to delete listing')
   }
 }
 
-watch(filters, loadListings, { deep: true })
+watch(() => filters.value.platform, loadListings)
+watch(() => filters.value.status, loadListings)
 onMounted(loadListings)
 </script>
 
@@ -267,5 +343,90 @@ h1 {
 
 .btn-danger:hover {
   background: #c0392b !important;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  min-width: 400px;
+  max-width: 90%;
+}
+
+.modal h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.modal p {
+  margin-bottom: 1.5rem;
+}
+
+.modal .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.modal .form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.modal .form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.modal .form-group input:focus {
+  outline: none;
+  border-color: #42b983;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.modal-actions button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  background: #42b983;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #35a372;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
 }
 </style>

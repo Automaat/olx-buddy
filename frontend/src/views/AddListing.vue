@@ -55,6 +55,8 @@ import { listingsApi } from '../services/api'
 
 const router = useRouter()
 
+const REDIRECT_DELAY_MS = 1500
+
 const form = ref({
   platform: '',
   url: '',
@@ -81,9 +83,16 @@ const handleSubmit = async () => {
 
     setTimeout(() => {
       router.push('/')
-    }, 1500)
-  } catch (err: any) {
-    error.value = err.response?.data?.detail || err.message || 'Failed to add listing'
+    }, REDIRECT_DELAY_MS)
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      error.value = axiosErr.response?.data?.detail || axiosErr.message || 'Failed to add listing'
+    } else if (err instanceof Error) {
+      error.value = err.message
+    } else {
+      error.value = 'Failed to add listing'
+    }
   } finally {
     loading.value = false
   }

@@ -4,8 +4,10 @@
 
     <form @submit.prevent="handleSubmit" class="form">
       <div class="form-group">
-        <label>Upload Photos (max 10) *</label>
+        <label for="photo-upload">Upload Photos (max 10) *</label>
         <input
+          id="photo-upload"
+          ref="fileInput"
           type="file"
           accept="image/*"
           multiple
@@ -125,8 +127,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useToast } from 'vue-toastification'
 import { generateApi } from '../services/api'
 import type { GenerateDescriptionResponse } from '../types'
+
+const toast = useToast()
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const form = ref({
   category: '',
@@ -177,6 +183,9 @@ const handleFileChange = async (event: Event) => {
   } catch (err: any) {
     error.value = err.response?.data?.detail || 'Failed to upload images'
     selectedFiles.value = []
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
   } finally {
     uploadingImages.value = false
   }
@@ -202,6 +211,13 @@ const handleSubmit = async () => {
       additional_details: form.value.additional_details || undefined,
       include_price_suggestion: form.value.include_price_suggestion,
     })
+
+    // Clear uploaded paths and files after successful generation
+    uploadedPaths.value = []
+    selectedFiles.value = []
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
   } catch (err: any) {
     error.value = err.response?.data?.detail || 'Failed to generate description'
   } finally {
@@ -212,9 +228,9 @@ const handleSubmit = async () => {
 const copyToClipboard = async (text: string) => {
   try {
     await navigator.clipboard.writeText(text)
-    alert('Copied to clipboard!')
+    toast.success('Copied to clipboard!')
   } catch (err) {
-    alert('Failed to copy to clipboard')
+    toast.error('Failed to copy to clipboard')
   }
 }
 
