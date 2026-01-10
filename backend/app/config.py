@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     scrape_rate_limit: int = 5
     use_proxies: bool = False
 
+    # Scheduler
+    scheduler_job_listing_limit: int = 1000
+
     # Optional
     telegram_bot_token: str | None = None
 
