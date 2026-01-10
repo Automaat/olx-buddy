@@ -585,13 +585,13 @@ Respond with ONLY valid JSON, no additional explanations."""
 
         # Choose model based on whether images are provided
         model = "llama3.2-vision" if image_paths else "llama3.2"
-        payload = {
+
+        # Build payload with images if provided
+        payload: dict[str, Any] = {
             "model": model,
             "prompt": prompt,
             "stream": False,
         }
-
-        # Add images if provided
         if image_paths:
             payload["images"] = [self._load_image_base64(path) for path in image_paths[:4]]
 
