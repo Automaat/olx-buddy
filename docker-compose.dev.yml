@@ -24,11 +24,14 @@ services:
       - DATABASE_URL=postgresql://user:pass@postgres:5432/olxbuddy
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - OLLAMA_BASE_URL=http://ollama:11434
     volumes:
       - ./backend:/app:cached
       - /app/.venv  # Don't mount .venv
     depends_on:
       postgres:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     restart: unless-stopped
 
@@ -49,5 +52,22 @@ services:
       timeout: 5s
       retries: 10
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./backend/entrypoint.ollama.sh:/entrypoint.sh
+    entrypoint: /entrypoint.sh
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+
 volumes:
   postgres_data:
+  ollama_data:
