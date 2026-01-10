@@ -121,7 +121,7 @@ Respond with ONLY the category name (one word), without any additional explanati
             # Extract images
             images = []
             for img in soup.find_all("img", src=True)[:10]:
-                img_url = img["src"]
+                img_url = str(img["src"])
                 if img_url.startswith("http"):
                     images.append(img_url)
 
