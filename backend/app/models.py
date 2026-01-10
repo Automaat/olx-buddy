@@ -95,3 +95,18 @@ class Monitor(Base):
     notify_telegram: Mapped[bool] = mapped_column(Boolean, default=False)
     last_checked: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class JobExecution(Base):
+    """Job execution history for scheduler monitoring."""
+
+    __tablename__ = "job_executions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    job_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    job_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    result_data: Mapped[dict | None] = mapped_column(JSON)
