@@ -122,7 +122,7 @@ class ScraperService:
                             continue
 
                         title = title_elem.get_text(strip=True)
-                        url = urljoin("https://www.olx.pl", link_elem["href"])
+                        url = urljoin("https://www.olx.pl", str(link_elem["href"]))
 
                         # Price
                         price_elem = listing.find("p", {"data-testid": "ad-price"})
@@ -191,7 +191,7 @@ class ScraperService:
                         if not link_elem:
                             continue
 
-                        url = urljoin("https://www.vinted.pl", link_elem["href"])
+                        url = urljoin("https://www.vinted.pl", str(link_elem["href"]))
 
                         # Title
                         title_elem = listing.find(class_=lambda x: x and "ItemBox_title" in str(x))
