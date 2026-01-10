@@ -139,12 +139,8 @@ class TestAnalyticsSummary:
     def test_analytics_summary_with_data(self, mock_db, sample_listings):
         """Test analytics summary with various listings."""
         # Setup mock query responses
-        active_listings = [
-            listing for listing in sample_listings if listing.status == "active"
-        ]
-        sold_listings = [
-            listing for listing in sample_listings if listing.status == "sold"
-        ]
+        active_listings = [listing for listing in sample_listings if listing.status == "active"]
+        sold_listings = [listing for listing in sample_listings if listing.status == "sold"]
 
         # Mock count queries
         query_mock = MagicMock()
@@ -630,19 +626,13 @@ class TestAnalyticsEndpoints:
     @patch("app.routers.analytics.get_db")
     @patch("app.routers.analytics.get_sales_over_time")
     @patch("app.routers.analytics.get_listings_created_over_time")
-    def test_sales_over_time_endpoint(
-        self, mock_listings_created, mock_sales, mock_get_db
-    ):
+    def test_sales_over_time_endpoint(self, mock_listings_created, mock_sales, mock_get_db):
         """Test GET /api/analytics/sales-over-time endpoint."""
         mock_db = MagicMock()
         mock_get_db.return_value = mock_db
 
-        mock_sales.return_value = [
-            {"period": "2026-01-10", "sales_count": 5, "revenue": 500.0}
-        ]
-        mock_listings_created.return_value = [
-            {"period": "2026-01-10", "listings_count": 3}
-        ]
+        mock_sales.return_value = [{"period": "2026-01-10", "sales_count": 5, "revenue": 500.0}]
+        mock_listings_created.return_value = [{"period": "2026-01-10", "listings_count": 3}]
 
         response = client.get("/api/analytics/sales-over-time?period=daily&days=7")
 
@@ -655,9 +645,7 @@ class TestAnalyticsEndpoints:
     @patch("app.routers.analytics.get_db")
     @patch("app.routers.analytics.get_sales_over_time")
     @patch("app.routers.analytics.get_listings_created_over_time")
-    def test_sales_over_time_invalid_period(
-        self, mock_listings_created, mock_sales, mock_get_db
-    ):
+    def test_sales_over_time_invalid_period(self, mock_listings_created, mock_sales, mock_get_db):
         """Test sales over time with invalid period parameter."""
         response = client.get("/api/analytics/sales-over-time?period=invalid")
 
@@ -674,9 +662,7 @@ class TestAnalyticsEndpoints:
             "best_categories": [
                 {"category": "electronics", "sales_count": 10, "total_revenue": 2000.0}
             ],
-            "best_brands": [
-                {"brand": "Apple", "sales_count": 5, "total_revenue": 1500.0}
-            ],
+            "best_brands": [{"brand": "Apple", "sales_count": 5, "total_revenue": 1500.0}],
             "most_profitable": [],
             "fastest_selling": [],
         }
@@ -719,9 +705,7 @@ class TestAnalyticsEndpoints:
     @patch("app.routers.analytics.get_db")
     @patch("app.routers.analytics.crud.get_listing")
     @patch("app.routers.analytics.crud.get_competitor_prices")
-    def test_price_monitoring_endpoint(
-        self, mock_get_prices, mock_get_listing, mock_get_db
-    ):
+    def test_price_monitoring_endpoint(self, mock_get_prices, mock_get_listing, mock_get_db):
         """Test GET /api/analytics/price-monitoring/{listing_id} endpoint."""
         mock_db = MagicMock()
         mock_get_db.return_value = mock_db
@@ -769,9 +753,7 @@ class TestAnalyticsEndpoints:
     @patch("app.routers.analytics.get_db")
     @patch("app.routers.analytics.crud.get_listing")
     @patch("app.routers.analytics.crud.get_price_history")
-    def test_price_history_endpoint(
-        self, mock_get_history, mock_get_listing, mock_get_db
-    ):
+    def test_price_history_endpoint(self, mock_get_history, mock_get_listing, mock_get_db):
         """Test GET /api/analytics/price-monitoring/{listing_id}/history endpoint."""
         mock_db = MagicMock()
         mock_get_db.return_value = mock_db
