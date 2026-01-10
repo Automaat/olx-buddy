@@ -745,9 +745,9 @@ class TestParseJSONResponse:
 
     def test_parse_json_response_markdown_code_block(self, ai_service):
         """Test parsing JSON in markdown code block."""
-        response = '''```json
+        response = """```json
 {"title": "Test", "price": 99.99}
-```'''
+```"""
         result = ai_service._parse_json_response(response)
 
         assert result["title"] == "Test"
@@ -755,9 +755,9 @@ class TestParseJSONResponse:
 
     def test_parse_json_response_code_block_without_language(self, ai_service):
         """Test parsing JSON in code block without language specifier."""
-        response = '''```
+        response = """```
 {"title": "Test"}
-```'''
+```"""
         result = ai_service._parse_json_response(response)
 
         assert result["title"] == "Test"
@@ -771,11 +771,11 @@ class TestParseJSONResponse:
 
     def test_parse_json_response_with_extra_text(self, ai_service):
         """Test parsing JSON with extra text in code block."""
-        response = '''```json
+        response = """```json
 Some explanation text
 {"title": "Test"}
 More text after
-```'''
+```"""
         result = ai_service._parse_json_response(response)
 
         # Should handle extra text gracefully
