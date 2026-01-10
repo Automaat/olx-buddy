@@ -1,10 +1,15 @@
 """API routes for listing management."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.database import get_db
+from app.services.scraper import ScraperService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/listings", tags=["listings"])
 
@@ -15,12 +20,15 @@ async def add_listing_by_url(
     db: Session = Depends(get_db),
 ):
     """Add listing by pasting URL."""
+    url_str = str(listing_data.url)
+
     # Extract external ID from URL path
     url_path = listing_data.url.path
     if not url_path:
         raise HTTPException(status_code=400, detail="Invalid URL: missing path")
 
-    external_id = url_path.split("/")[-1]
+    # External ID is assumed to be in the last path segment (e.g., "CID88-ID18PrbS.html")
+    external_id = url_path.split("/")[-1].replace(".html", "")
     if not external_id:
         raise HTTPException(status_code=400, detail="Invalid URL: cannot extract listing ID")
 
@@ -29,15 +37,49 @@ async def add_listing_by_url(
     if existing:
         raise HTTPException(status_code=400, detail="Listing already exists")
 
-    # TODO: Implement scraping logic in Phase 2
-    # For now, create minimal listing
-    listing_create = schemas.ListingCreate(
-        platform=listing_data.platform,
-        external_id=external_id,
-        url=str(listing_data.url),
-        initial_cost=listing_data.initial_cost,
-    )
+    # Scrape listing data
+    scraper = ScraperService()
+    scraped_data = None
 
+    try:
+        if listing_data.platform == "olx":
+            scraped_data = await scraper.scrape_olx_listing(url_str)
+            if scraped_data:
+                logger.info("Scraped OLX listing: %s", scraped_data.get("title"))
+        else:
+            # Vinted scraping not yet implemented
+            logger.warning("Vinted scraping not implemented, creating minimal listing")
+
+    except ValueError as e:
+        logger.warning("Failed to scrape listing from %s: %s", url_str, e)
+        raise HTTPException(status_code=400, detail=f"Failed to scrape listing: {e}") from e
+    except Exception as e:
+        logger.exception("Unexpected error scraping listing from %s", url_str)
+        raise HTTPException(status_code=500, detail="Failed to fetch listing data") from e
+
+    # Build listing data
+    listing_create_data = {
+        "platform": listing_data.platform,
+        "external_id": (scraped_data.get("external_id") if scraped_data else None) or external_id,
+        "url": url_str,
+        "initial_cost": listing_data.initial_cost,
+    }
+
+    # Add scraped data if available
+    if scraped_data:
+        listing_create_data.update(
+            {
+                "title": scraped_data.get("title"),
+                "description": scraped_data.get("description"),
+                "price": scraped_data.get("price"),
+                "currency": scraped_data.get("currency", "PLN"),
+                "category": scraped_data.get("category"),
+                "condition": scraped_data.get("condition"),
+                "images": scraped_data.get("images"),
+            }
+        )
+
+    listing_create = schemas.ListingCreate(**listing_create_data)
     return crud.create_listing(db, listing_create)
 
 

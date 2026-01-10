@@ -1,6 +1,7 @@
 """Scraper service for fetching similar items from OLX and Vinted."""
 
 import asyncio
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -227,6 +228,90 @@ class ScraperService:
         except Exception as e:
             logger.error("Vinted search failed: %s", e)
             return []
+
+    async def scrape_olx_listing(self, url: str) -> dict[str, Any]:
+        """Scrape OLX listing details from URL.
+
+        Args:
+            url: Full OLX listing URL
+
+        Returns:
+            Dict containing listing data: title, description, price, currency,
+            category, images, condition, external_id
+
+        Raises:
+            ValueError: If URL is invalid or listing data cannot be extracted
+            httpx.HTTPError: If request fails
+        """
+        await self._apply_rate_limit()
+
+        try:
+            async with httpx.AsyncClient(headers=self.headers, timeout=15.0) as client:
+                response = await client.get(url, follow_redirects=True)
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, "html.parser")
+
+                # OLX embeds structured data in JSON-LD format
+                script = soup.find("script", type="application/ld+json")
+                if not script or not script.string:
+                    msg = "No JSON-LD data found on page"
+                    raise ValueError(msg)
+
+                data = json.loads(script.string)
+
+                # Validate required fields
+                if not data.get("name"):
+                    msg = "Missing title in listing data"
+                    raise ValueError(msg)
+
+                if not data.get("offers") or not isinstance(data["offers"], dict):
+                    msg = "Missing or invalid offers data"
+                    raise ValueError(msg)
+
+                offers = data["offers"]
+
+                # Extract category name from URL (last segment before trailing slash)
+                category = None
+                if category_url := data.get("category"):
+                    category_parts = category_url.rstrip("/").split("/")
+                    if category_parts:
+                        category = category_parts[-1].replace("-", " ").title()
+
+                # Map schema.org condition to our format
+                condition = None
+                if condition_url := offers.get("itemCondition"):
+                    if "New" in condition_url:
+                        condition = "new"
+                    elif "Used" in condition_url:
+                        condition = "good"
+
+                # Build images dict with URLs
+                images_data = None
+                if image_list := data.get("image"):
+                    if isinstance(image_list, list):
+                        images_data = {
+                            f"image_{i}": image_url for i, image_url in enumerate(image_list)
+                        }
+
+                return {
+                    "title": data["name"],
+                    "description": data.get("description", ""),
+                    "price": float(offers.get("price", 0)),
+                    "currency": offers.get("priceCurrency", "PLN"),
+                    "category": category,
+                    "images": images_data,
+                    "condition": condition,
+                    "external_id": data.get("sku", ""),
+                }
+
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse JSON-LD data: %s", e)
+            msg = "Invalid JSON data in listing"
+            raise ValueError(msg) from e
+        except Exception:
+            logger.exception("OLX listing scrape failed for %s", url)
+            raise
 
     def _parse_price(self, price_text: str) -> float:
         """Parse price from text."""
