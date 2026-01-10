@@ -27,7 +27,7 @@ async def add_listing_by_url(
     if not url_path:
         raise HTTPException(status_code=400, detail="Invalid URL: missing path")
 
-    # For OLX: external ID is in the filename (e.g., CID88-ID18PrbS.html)
+    # External ID is assumed to be in the last path segment (e.g., "CID88-ID18PrbS.html")
     external_id = url_path.split("/")[-1].replace(".html", "")
     if not external_id:
         raise HTTPException(status_code=400, detail="Invalid URL: cannot extract listing ID")
@@ -44,7 +44,8 @@ async def add_listing_by_url(
     try:
         if listing_data.platform == "olx":
             scraped_data = await scraper.scrape_olx_listing(url_str)
-            logger.info("Scraped OLX listing: %s", scraped_data.get("title"))
+            if scraped_data:
+                logger.info("Scraped OLX listing: %s", scraped_data.get("title"))
         else:
             # Vinted scraping not yet implemented
             logger.warning("Vinted scraping not implemented, creating minimal listing")

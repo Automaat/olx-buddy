@@ -290,7 +290,7 @@ class ScraperService:
                 images_data = None
                 if image_list := data.get("image"):
                     if isinstance(image_list, list):
-                        images_data = {f"image_{i}": url for i, url in enumerate(image_list)}
+                        images_data = {f"image_{i}": image_url for i, image_url in enumerate(image_list)}
 
                 return {
                     "title": data["name"],
