@@ -134,6 +134,7 @@ class AnalyticsSummaryResponse(BaseModel):
     avg_sale_price: float
     total_profit: float
     inventory_value: float
+    negative_profit_count: int
 
 
 class SalesOverTimeItem(BaseModel):

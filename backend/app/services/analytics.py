@@ -42,6 +42,19 @@ def get_analytics_summary(db: Session) -> dict:
         .first()
     )
 
+    # Count items with negative profit (data quality metric)
+    negative_profit_count = (
+        db.query(func.count(Listing.id))
+        .filter(
+            Listing.status == "sold",
+            Listing.sale_price.isnot(None),
+            Listing.initial_cost.isnot(None),
+            Listing.sale_price < Listing.initial_cost,
+        )
+        .scalar()
+        or 0
+    )
+
     return {
         "total_listings": active_count + sold_count,
         "active_listings": active_count,
@@ -50,6 +63,7 @@ def get_analytics_summary(db: Session) -> dict:
         "avg_sale_price": float(sold_items.avg_sale_price or 0),
         "total_profit": float(profit_query.total_profit or 0),
         "inventory_value": float(inventory_value.total_value or 0),
+        "negative_profit_count": negative_profit_count,
     }
 
 
@@ -57,14 +71,13 @@ def get_sales_over_time(db: Session, period: str = "daily", days: int = 30) -> l
     """Get sales over time grouped by period."""
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
-    # Determine grouping based on period
+    # Determine grouping based on period (PostgreSQL)
     if period == "daily":
-        date_format = func.date(Listing.sold_at)
+        date_format = func.date_trunc("day", Listing.sold_at)
     elif period == "weekly":
-        # SQLite doesn't have week function, approximate with date grouping
-        date_format = func.date(Listing.sold_at, "weekday 0", "-6 days")
+        date_format = func.date_trunc("week", Listing.sold_at)
     else:  # monthly
-        date_format = func.strftime("%Y-%m", Listing.sold_at)
+        date_format = func.date_trunc("month", Listing.sold_at)
 
     results = (
         db.query(
@@ -96,13 +109,13 @@ def get_listings_created_over_time(
     """Get listings created over time grouped by period."""
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
-    # Determine grouping based on period
+    # Determine grouping based on period (PostgreSQL)
     if period == "daily":
-        date_format = func.date(Listing.created_at)
+        date_format = func.date_trunc("day", Listing.created_at)
     elif period == "weekly":
-        date_format = func.date(Listing.created_at, "weekday 0", "-6 days")
+        date_format = func.date_trunc("week", Listing.created_at)
     else:  # monthly
-        date_format = func.strftime("%Y-%m", Listing.created_at)
+        date_format = func.date_trunc("month", Listing.created_at)
 
     results = (
         db.query(
@@ -176,6 +189,8 @@ def get_best_sellers(db: Session, limit: int = 10) -> dict:
     )
 
     # Fastest-selling items (shortest time between posted_at and sold_at)
+    # PostgreSQL: EXTRACT(EPOCH FROM timestamp) / 86400 for days
+    days_diff = func.extract("epoch", Listing.sold_at - Listing.posted_at) / 86400.0
     fastest_items = (
         db.query(
             Listing.id,
@@ -184,14 +199,12 @@ def get_best_sellers(db: Session, limit: int = 10) -> dict:
             Listing.brand,
             Listing.posted_at,
             Listing.sold_at,
-            (func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).label(
-                "days_to_sell"
-            ),
+            days_diff.label("days_to_sell"),
         )
         .filter(
             Listing.status == "sold", Listing.posted_at.isnot(None), Listing.sold_at.isnot(None)
         )
-        .order_by((func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).asc())
+        .order_by(days_diff.asc())
         .limit(limit)
         .all()
     )
@@ -267,9 +280,10 @@ def get_inventory_value(db: Session) -> dict:
     )
 
     # Average time to sell (for sold items)
+    # PostgreSQL: EXTRACT(EPOCH FROM timestamp) / 86400 for days
     avg_time_to_sell = (
         db.query(
-            func.avg(func.julianday(Listing.sold_at) - func.julianday(Listing.posted_at)).label(
+            func.avg(func.extract("epoch", Listing.sold_at - Listing.posted_at) / 86400.0).label(
                 "avg_days"
             )
         )

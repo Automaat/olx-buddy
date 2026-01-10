@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app import crud, schemas
@@ -101,8 +101,12 @@ async def price_monitoring(
     - listing_id: ID of the listing
     - limit: Number of competitor prices to return
 
-    Returns competitor prices sorted by most recent.
+    Returns competitor prices sorted by scraped_at (most recent first).
     """
+    listing = crud.get_listing(db, listing_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
     competitor_prices = crud.get_competitor_prices(db, listing_id, limit=limit)
 
     prices_list = []
@@ -147,8 +151,12 @@ async def price_history(
     - listing_id: ID of the listing
     - limit: Number of price history entries to return
 
-    Returns price history sorted by most recent.
+    Returns price history sorted by recorded_at (most recent first).
     """
+    listing = crud.get_listing(db, listing_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
     price_history = crud.get_price_history(db, listing_id, limit=limit)
 
     history_list = []
