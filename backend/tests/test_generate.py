@@ -140,7 +140,7 @@ class TestGenerateDescriptionEndpoint:
         response = client.post(
             "/api/generate/description",
             data={
-                "category": "clothing",
+                "category": "womens_fashion",
                 "image_paths": str(test_image),
                 "brand": "Nike",
                 "condition": "good",
@@ -150,14 +150,21 @@ class TestGenerateDescriptionEndpoint:
 
         assert response.status_code == 200
         data = response.json()
+        assert data["category"] == "womens_fashion"
         assert data["description"] == "Generated description"
         assert data["suggested_price"] == 100.0
 
-    def test_generate_description_invalid_category(self):
+    def test_generate_description_invalid_category(self, mock_storage_service, tmp_path):
         """Test with invalid category."""
+        # Create test image
+        test_image = tmp_path / "test.jpg"
+        test_image.write_bytes(b"test")
+
+        mock_storage_service.upload_dir = tmp_path
+
         response = client.post(
             "/api/generate/description",
-            data={"category": "invalid_category", "image_paths": "test.jpg"},
+            data={"category": "invalid_category", "image_paths": str(test_image)},
         )
 
         assert response.status_code == 400
@@ -167,7 +174,7 @@ class TestGenerateDescriptionEndpoint:
         """Test with no image paths."""
         response = client.post(
             "/api/generate/description",
-            data={"category": "clothing", "image_paths": " "},
+            data={"category": "womens_fashion", "image_paths": " "},
         )
 
         assert response.status_code == 400
@@ -183,7 +190,7 @@ class TestGenerateDescriptionEndpoint:
 
         response = client.post(
             "/api/generate/description",
-            data={"category": "clothing", "image_paths": str(outside_file)},
+            data={"category": "womens_fashion", "image_paths": str(outside_file)},
         )
 
         assert response.status_code == 403
@@ -195,7 +202,7 @@ class TestGenerateDescriptionEndpoint:
 
         response = client.post(
             "/api/generate/description",
-            data={"category": "clothing", "image_paths": str(tmp_path / "nonexistent.jpg")},
+            data={"category": "womens_fashion", "image_paths": str(tmp_path / "nonexistent.jpg")},
         )
 
         assert response.status_code == 404
@@ -207,7 +214,7 @@ class TestGenerateDescriptionEndpoint:
 
         response = client.post(
             "/api/generate/description",
-            data={"category": "clothing", "image_paths": "\x00invalid"},
+            data={"category": "womens_fashion", "image_paths": "\x00invalid"},
         )
 
         assert response.status_code == 400
@@ -226,7 +233,7 @@ class TestGenerateDescriptionEndpoint:
         response = client.post(
             "/api/generate/description",
             data={
-                "category": "clothing",
+                "category": "womens_fashion",
                 "image_paths": str(test_image),
                 "include_price_suggestion": "false",
             },
@@ -250,7 +257,7 @@ class TestGenerateDescriptionEndpoint:
 
         response = client.post(
             "/api/generate/description",
-            data={"category": "clothing", "image_paths": str(test_image)},
+            data={"category": "womens_fashion", "image_paths": str(test_image)},
         )
 
         assert response.status_code == 200
@@ -272,7 +279,7 @@ class TestGenerateDescriptionEndpoint:
 
         response = client.post(
             "/api/generate/description",
-            data={"category": "clothing", "image_paths": str(test_image)},
+            data={"category": "womens_fashion", "image_paths": str(test_image)},
         )
 
         assert response.status_code == 503
@@ -290,7 +297,7 @@ class TestGenerateDescriptionEndpoint:
 
         response = client.post(
             "/api/generate/description",
-            data={"category": "clothing", "image_paths": str(test_image)},
+            data={"category": "womens_fashion", "image_paths": str(test_image)},
         )
 
         assert response.status_code == 500
@@ -321,7 +328,7 @@ class TestGenerateDescriptionEndpoint:
         response = client.post(
             "/api/generate/description",
             data={
-                "category": "clothing",
+                "category": "womens_fashion",
                 "image_paths": f"{test_image1},{test_image2}",
             },
         )
@@ -354,7 +361,7 @@ class TestGenerateDescriptionEndpoint:
         response = client.post(
             "/api/generate/description",
             data={
-                "category": "clothing",
+                "category": "womens_fashion",
                 "image_paths": str(test_image),
                 "brand": "Nike",
                 "condition": "like_new",
@@ -397,7 +404,7 @@ class TestGenerateDescriptionEndpoint:
         response = client.post(
             "/api/generate/description",
             data={
-                "category": "clothing",
+                "category": "womens_fashion",
                 "image_paths": str(test_image),
                 "additional_details": long_details,
             },
@@ -408,7 +415,7 @@ class TestGenerateDescriptionEndpoint:
         call_args = mock_price_service.suggest_price.call_args
         search_query = call_args[1]["search_query"]
         # Should be truncated
-        assert len(search_query) < len(long_details) + len("clothing")
+        assert len(search_query) < len(long_details) + len("womens_fashion")
 
 
 class TestGetCategoriesEndpoint:
@@ -429,15 +436,5 @@ class TestGetCategoriesEndpoint:
         response = client.get("/api/generate/categories")
 
         data = response.json()
-        expected_categories = [
-            "clothing",
-            "electronics",
-            "furniture",
-            "home_garden",
-            "sports",
-            "toys_kids",
-            "books_media",
-            "other",
-        ]
-
-        assert set(data["categories"]) == set(expected_categories)
+        # Verify we get all supported categories
+        assert set(data["categories"]) == set(SUPPORTED_CATEGORIES)

@@ -28,6 +28,7 @@ export interface AddListingRequest {
 }
 
 export interface GenerateDescriptionResponse {
+  category: string
   description: string
   suggested_price?: number
   min_price?: number
@@ -44,6 +45,19 @@ export interface GenerateDescriptionResponse {
 export interface ImageUploadResponse {
   image_paths: string[]
   count: number
+}
+
+export interface ExtractFromURLResponse {
+  title?: string
+  brand?: string
+  description?: string
+  price?: number
+  currency?: string
+  category?: string
+  condition?: string
+  size?: string
+  images: string[]
+  specifications?: any
 }
 
 export type ItemCondition = 'new' | 'like_new' | 'good' | 'fair' | 'poor'

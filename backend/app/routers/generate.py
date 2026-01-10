@@ -8,6 +8,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.schemas import (
     CategoryResponse,
+    DescriptionLanguage,
+    ExtractFromURLRequest,
+    ExtractFromURLResponse,
     GenerateDescriptionResponse,
     ImageUploadResponse,
     ItemCondition,
@@ -66,8 +69,10 @@ async def upload_images(
 
 @router.post("/description", response_model=GenerateDescriptionResponse)
 async def generate_description(
-    category: Annotated[str, Form()],
     image_paths: Annotated[str, Form(description="Comma-separated image paths")],
+    language: Annotated[DescriptionLanguage, Form()] = DescriptionLanguage.POLISH,
+    product_url: Annotated[str | None, Form()] = None,
+    category: Annotated[str | None, Form()] = None,
     brand: Annotated[str | None, Form()] = None,
     condition: Annotated[ItemCondition | None, Form()] = None,
     size: Annotated[str | None, Form()] = None,
@@ -75,12 +80,6 @@ async def generate_description(
     include_price_suggestion: Annotated[bool, Form()] = True,
 ) -> GenerateDescriptionResponse:
     """Generate description and price suggestion from images and details."""
-    # Validate category
-    if category not in SUPPORTED_CATEGORIES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid category. Supported: {', '.join(SUPPORTED_CATEGORIES)}",
-        )
 
     # Parse image paths
     paths = [p.strip() for p in image_paths.split(",") if p.strip()]
@@ -112,6 +111,18 @@ async def generate_description(
             ) from e
 
     try:
+        # Suggest category if not provided
+        if not category:
+            category = await ai_service.suggest_category(paths, language.value)
+            logger.info("AI suggested category: %s", category)
+        else:
+            # Validate provided category
+            if category not in SUPPORTED_CATEGORIES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid category. Supported: {', '.join(SUPPORTED_CATEGORIES)}",
+                )
+
         # Generate description
         description = await ai_service.generate_description(
             category=category,
@@ -120,6 +131,8 @@ async def generate_description(
             condition=condition.value if condition else None,
             size=size,
             additional_details=additional_details,
+            language=language.value,
+            product_url=product_url,
         )
 
         # Generate price suggestion if requested
@@ -146,6 +159,7 @@ async def generate_description(
                 # Continue without price suggestion
 
         return GenerateDescriptionResponse(
+            category=category,
             description=description,
             suggested_price=price_data.get("suggested_price"),
             min_price=price_data.get("min_price"),
@@ -155,6 +169,9 @@ async def generate_description(
             similar_items=price_data.get("similar_items", []),
         )
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except RuntimeError as e:
         logger.error("AI generation failed: %s", e)
         raise HTTPException(
@@ -173,3 +190,37 @@ async def generate_description(
 async def get_categories() -> CategoryResponse:
     """Get list of supported categories."""
     return CategoryResponse(categories=SUPPORTED_CATEGORIES)
+
+
+@router.post("/extract-from-url", response_model=ExtractFromURLResponse)
+async def extract_from_url(request: ExtractFromURLRequest) -> ExtractFromURLResponse:
+    """Extract product information from URL."""
+    try:
+        extracted_data = await ai_service.extract_from_url(str(request.url))
+
+        return ExtractFromURLResponse(
+            title=extracted_data.get("title"),
+            brand=extracted_data.get("brand"),
+            description=extracted_data.get("description"),
+            price=extracted_data.get("price"),
+            currency=extracted_data.get("currency"),
+            category=extracted_data.get("category"),
+            condition=extracted_data.get("condition"),
+            size=extracted_data.get("size"),
+            images=extracted_data.get("images", []),
+            specifications=extracted_data.get("specifications"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        logger.error("AI service unavailable: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="AI service unavailable. Please configure at least one AI provider.",
+        ) from e
+    except Exception as e:
+        logger.error("URL extraction failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to extract information from URL",
+        ) from e
