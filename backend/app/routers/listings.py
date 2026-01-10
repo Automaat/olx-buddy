@@ -59,7 +59,7 @@ async def add_listing_by_url(
     # Build listing data
     listing_create_data = {
         "platform": listing_data.platform,
-        "external_id": scraped_data.get("external_id") or external_id,
+        "external_id": (scraped_data.get("external_id") if scraped_data else None) or external_id,
         "url": url_str,
         "initial_cost": listing_data.initial_cost,
     }
