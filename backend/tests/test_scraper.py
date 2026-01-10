@@ -323,6 +323,198 @@ class TestScraperService:
         score2 = scraper._calculate_similarity("laptop", "laptop")
         assert score1 == score2 == 1.0
 
+    @pytest.mark.asyncio
+    async def test_scrape_olx_listing_success(self, scraper):
+        """Test successful OLX listing scraping."""
+        html_content = """
+        <html>
+        <head>
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": "Lego minifigurki spiderman Spider-Man",
+          "image": [
+            "https://example.com/image1.jpg",
+            "https://example.com/image2.jpg"
+          ],
+          "url": "https://www.olx.pl/d/oferta/lego-CID88-ID18PrbS.html",
+          "description": "Lego minifigurki spiderman",
+          "category": "https://www.olx.pl/dla-dzieci/zabawki/klocki/klocki-plastikowe/",
+          "sku": "1046602772",
+          "offers": {
+            "@type": "Offer",
+            "priceCurrency": "PLN",
+            "price": 10,
+            "itemCondition": "https://schema.org/UsedCondition"
+          }
+        }
+        </script>
+        </head>
+        <body></body>
+        </html>
+        """
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.text = html_content
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
+
+            result = await scraper.scrape_olx_listing("https://www.olx.pl/d/oferta/lego-test.html")
+
+            assert result["title"] == "Lego minifigurki spiderman Spider-Man"
+            assert result["description"] == "Lego minifigurki spiderman"
+            assert result["price"] == 10.0
+            assert result["currency"] == "PLN"
+            assert result["category"] == "Klocki Plastikowe"
+            assert result["condition"] == "good"
+            assert result["external_id"] == "1046602772"
+            assert result["images"] is not None
+            assert "image_0" in result["images"]
+            assert "image_1" in result["images"]
+
+    @pytest.mark.asyncio
+    async def test_scrape_olx_listing_new_condition(self, scraper):
+        """Test OLX scraping with new condition."""
+        html_content = """
+        <html>
+        <head>
+        <script type="application/ld+json">
+        {
+          "@type": "Product",
+          "name": "Test Item",
+          "offers": {
+            "priceCurrency": "PLN",
+            "price": 100,
+            "itemCondition": "https://schema.org/NewCondition"
+          }
+        }
+        </script>
+        </head>
+        </html>
+        """
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.text = html_content
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
+
+            result = await scraper.scrape_olx_listing("https://www.olx.pl/test.html")
+
+            assert result["condition"] == "new"
+
+    @pytest.mark.asyncio
+    async def test_scrape_olx_listing_no_json_ld(self, scraper):
+        """Test OLX scraping with no JSON-LD data."""
+        html_content = "<html><body>No JSON-LD data</body></html>"
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.text = html_content
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
+
+            with pytest.raises(ValueError, match="No JSON-LD data found"):
+                await scraper.scrape_olx_listing("https://www.olx.pl/test.html")
+
+    @pytest.mark.asyncio
+    async def test_scrape_olx_listing_invalid_json(self, scraper):
+        """Test OLX scraping with invalid JSON data."""
+        html_content = """
+        <html>
+        <script type="application/ld+json">
+        {invalid json}
+        </script>
+        </html>
+        """
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.text = html_content
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
+
+            with pytest.raises(ValueError, match="Invalid JSON data"):
+                await scraper.scrape_olx_listing("https://www.olx.pl/test.html")
+
+    @pytest.mark.asyncio
+    async def test_scrape_olx_listing_missing_title(self, scraper):
+        """Test OLX scraping with missing title."""
+        html_content = """
+        <html>
+        <script type="application/ld+json">
+        {
+          "offers": {
+            "price": 100,
+            "priceCurrency": "PLN"
+          }
+        }
+        </script>
+        </html>
+        """
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.text = html_content
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
+
+            with pytest.raises(ValueError, match="Missing title"):
+                await scraper.scrape_olx_listing("https://www.olx.pl/test.html")
+
+    @pytest.mark.asyncio
+    async def test_scrape_olx_listing_missing_offers(self, scraper):
+        """Test OLX scraping with missing offers."""
+        html_content = """
+        <html>
+        <script type="application/ld+json">
+        {
+          "name": "Test Item"
+        }
+        </script>
+        </html>
+        """
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.text = html_content
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
+
+            with pytest.raises(ValueError, match="Missing or invalid offers"):
+                await scraper.scrape_olx_listing("https://www.olx.pl/test.html")
+
+    @pytest.mark.asyncio
+    async def test_scrape_olx_listing_http_error(self, scraper):
+        """Test OLX scraping with HTTP error."""
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                side_effect=httpx.HTTPError("Connection failed")
+            )
+
+            with pytest.raises(httpx.HTTPError):
+                await scraper.scrape_olx_listing("https://www.olx.pl/test.html")
+
 
 class TestPriceSuggestionService:
     """Test PriceSuggestionService class."""
