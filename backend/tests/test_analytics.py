@@ -6,10 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.crud import create_listing
 from app.main import app
-from app.models import CompetitorPrice, Listing, PriceHistory
-from app.schemas import ListingCreate
+from app.models import Listing
 from app.services.analytics import (
     get_analytics_summary,
     get_best_sellers,
@@ -141,8 +139,12 @@ class TestAnalyticsSummary:
     def test_analytics_summary_with_data(self, mock_db, sample_listings):
         """Test analytics summary with various listings."""
         # Setup mock query responses
-        active_listings = [l for l in sample_listings if l.status == "active"]
-        sold_listings = [l for l in sample_listings if l.status == "sold"]
+        active_listings = [
+            listing for listing in sample_listings if listing.status == "active"
+        ]
+        sold_listings = [
+            listing for listing in sample_listings if listing.status == "sold"
+        ]
 
         # Mock count queries
         query_mock = MagicMock()
