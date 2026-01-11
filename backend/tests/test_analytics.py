@@ -731,10 +731,10 @@ class TestAnalyticsEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["listing_id"] == 1
-        assert len(data["competitor_prices"]) == 1
-        assert data["competitor_prices"][0]["price"] == 120.0
-        assert data["competitor_prices"][0]["similarity_score"] == 0.85
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["competitor_price"] == 120.0
+        assert data[0]["similarity_score"] == 0.85
 
     @patch("app.routers.analytics.get_db")
     @patch("app.routers.analytics.crud.get_listing")

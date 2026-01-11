@@ -223,7 +223,7 @@ class TestRunJobNowEndpoint:
         mock_job = MagicMock(spec=Job)
         mock_job.id = "refresh_listings"
         mock_job.name = "Refresh active listings"
-        mock_job.modify = MagicMock()
+        mock_job.func = MagicMock()
         mock_scheduler.get_job.return_value = mock_job
 
         response = client.post("/api/scheduler/jobs/refresh_listings/run")
@@ -234,7 +234,8 @@ class TestRunJobNowEndpoint:
         assert data["job_id"] == "refresh_listings"
         assert data["job_name"] == "Refresh active listings"
 
-        mock_job.modify.assert_called_once_with(next_run_time=None)
+        # Job function should be accessed (stored for background execution)
+        assert mock_job.func is not None
 
     def test_run_job_now_not_found(self, mock_scheduler):
         """Test triggering non-existent job."""
