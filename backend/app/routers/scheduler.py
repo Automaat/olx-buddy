@@ -119,8 +119,9 @@ async def run_job_now(job_id: str, background_tasks: BackgroundTasks) -> dict[st
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
     # Execute job function in background thread
+    job_func = job.func
     async def run_job_async():
-        await asyncio.to_thread(job.func)
+        await asyncio.to_thread(job_func)
 
     background_tasks.add_task(run_job_async)
     logger.info("Manually triggered job %s", job_id)
