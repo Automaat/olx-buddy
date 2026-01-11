@@ -160,13 +160,26 @@ def delete_old_competitor_prices(db: Session, days: int = 30) -> int:
     return deleted
 
 
-def delete_competitor_prices_for_listing(db: Session, listing_id: int) -> int:
-    """Delete all competitor prices for a specific listing."""
-    deleted = (
-        db.query(CompetitorPrice)
-        .filter(CompetitorPrice.listing_id == listing_id)
-        .delete(synchronize_session=False)
-    )
+def delete_competitor_prices_for_listing(
+    db: Session, listing_id: int, before: datetime | None = None
+) -> int:
+    """Delete competitor prices for a specific listing.
+
+    Args:
+        db: Database session
+        listing_id: ID of the listing
+        before: If provided, only delete records scraped before this timestamp.
+                If None, deletes all competitor prices for the listing.
+
+    Returns:
+        Number of deleted records
+    """
+    query = db.query(CompetitorPrice).filter(CompetitorPrice.listing_id == listing_id)
+
+    if before:
+        query = query.filter(CompetitorPrice.scraped_at < before)
+
+    deleted = query.delete(synchronize_session=False)
     db.commit()
     return deleted
 

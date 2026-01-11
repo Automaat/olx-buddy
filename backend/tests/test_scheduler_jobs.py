@@ -134,10 +134,12 @@ class TestScrapeCompetitorPrices:
             patch("app.scheduler.get_listings") as mock_get,
             patch("app.scheduler.ScraperService") as mock_scraper_cls,
             patch("app.scheduler.create_competitor_price") as mock_create_price,
+            patch("app.scheduler.delete_competitor_prices_for_listing") as mock_delete,
             patch("app.scheduler.update_job_execution") as mock_update,
         ):
             mock_create.return_value = mock_execution
             mock_get.return_value = [mock_listing]
+            mock_delete.return_value = 0
 
             mock_scraper = MagicMock()
             mock_scraper_cls.return_value = mock_scraper
@@ -190,6 +192,7 @@ class TestScrapeCompetitorPrices:
             patch("app.scheduler.get_listings") as mock_get,
             patch("app.scheduler.ScraperService"),
             patch("app.scheduler.create_competitor_price") as mock_create_price,
+            patch("app.scheduler.delete_competitor_prices_for_listing"),
             patch("app.scheduler.update_job_execution") as mock_update,
         ):
             mock_create.return_value = mock_execution

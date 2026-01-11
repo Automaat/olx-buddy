@@ -9,6 +9,7 @@ from app.crud import (
     create_competitor_price,
     create_job_execution,
     create_price_history,
+    delete_competitor_prices_for_listing,
     delete_old_competitor_prices,
     get_competitor_prices,
     get_job_executions,
@@ -182,6 +183,38 @@ class TestCompetitorPriceCRUD:
         result = delete_old_competitor_prices(mock_db, days=7)
 
         assert result == 5
+
+    def test_delete_competitor_prices_for_listing(self, mock_db):
+        """Test deleting all competitor prices for a specific listing."""
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.delete.return_value = 3
+        mock_db.commit.return_value = None
+
+        result = delete_competitor_prices_for_listing(mock_db, listing_id=1)
+
+        assert result == 3
+        assert mock_db.commit.called
+
+    def test_delete_competitor_prices_for_listing_with_timestamp(self, mock_db):
+        """Test deleting competitor prices for a listing before a timestamp."""
+        from datetime import datetime
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.delete.return_value = 2
+        mock_db.commit.return_value = None
+
+        before_timestamp = datetime(2026, 1, 1, 12, 0, 0)
+        result = delete_competitor_prices_for_listing(
+            mock_db, listing_id=1, before=before_timestamp
+        )
+
+        assert result == 2
+        assert mock_db.commit.called
+        assert mock_query.filter.call_count == 2
 
 
 class TestJobExecutionCRUD:
