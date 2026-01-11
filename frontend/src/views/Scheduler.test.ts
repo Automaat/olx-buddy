@@ -39,29 +39,47 @@ describe('Scheduler', () => {
 
   const mockJobHistory: JobExecution[] = [
     {
+      id: 1,
       job_id: 'job1',
-      run_time: '2024-01-10T09:00:00Z',
-      success: true,
-      result: { updated: 5 },
+      job_name: 'Update Listings',
+      status: 'success',
+      started_at: '2024-01-10T09:00:00Z',
+      completed_at: '2024-01-10T09:01:00Z',
+      error_message: null,
+      result_data: { updated: 5 },
     },
     {
+      id: 2,
       job_id: 'job1',
-      run_time: '2024-01-10T08:00:00Z',
-      success: false,
-      error: 'Connection timeout',
+      job_name: 'Update Listings',
+      status: 'error',
+      started_at: '2024-01-10T08:00:00Z',
+      completed_at: '2024-01-10T08:01:00Z',
+      error_message: 'Connection timeout',
+      result_data: null,
     },
   ]
 
   const mockAllHistory: JobExecution[] = [
     {
+      id: 1,
       job_id: 'job1',
-      run_time: '2024-01-10T09:00:00Z',
-      success: true,
+      job_name: 'Update Listings',
+      status: 'success',
+      started_at: '2024-01-10T09:00:00Z',
+      completed_at: '2024-01-10T09:01:00Z',
+      error_message: null,
+      result_data: null,
     },
     {
+      id: 2,
       job_id: 'job2',
-      run_time: '2024-01-10T08:30:00Z',
-      success: true,
+      job_name: 'Check Prices',
+      status: 'success',
+      started_at: '2024-01-10T08:30:00Z',
+      completed_at: '2024-01-10T08:31:00Z',
+      error_message: null,
+      result_data: null,
     },
   ]
 

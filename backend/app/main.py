@@ -1,5 +1,7 @@
 """Main FastAPI application."""
 
+import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import analytics, generate, listings
 from app.routers import scheduler as scheduler_router
 from app.scheduler import scheduler
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:     %(name)s - %(message)s",
+    stream=sys.stdout,
+    force=True,
+)
 
 
 @asynccontextmanager

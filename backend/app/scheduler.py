@@ -11,6 +11,7 @@ from app.config import settings
 from app.crud import (
     create_competitor_price,
     create_job_execution,
+    delete_competitor_prices_for_listing,
     delete_old_competitor_prices,
     get_listings,
     update_job_execution,
@@ -141,8 +142,34 @@ def scrape_competitor_prices():
                         max_results=10,
                     )
 
+                    logger.info(
+                        "Scraper returned %d similar items for listing %d",
+                        len(similar_items),
+                        listing.id,
+                    )
+
+                    # Filter out own listing
+                    listing_url = cast(str | None, listing.url)
+                    competitors = [
+                        item for item in similar_items if item.url != listing_url
+                    ]
+
+                    logger.info(
+                        "Filtered to %d competitors (excluded own listing) for listing %d",
+                        len(competitors),
+                        listing.id,
+                    )
+
+                    # Delete old competitor prices for this listing to prevent duplicates
+                    deleted = delete_competitor_prices_for_listing(db, cast(int, listing.id))
+                    logger.info(
+                        "Deleted %d old competitor prices for listing %d",
+                        deleted,
+                        listing.id,
+                    )
+
                     # Store competitor prices
-                    for item in similar_items:
+                    for item in competitors:
                         create_competitor_price(
                             db=db,
                             listing_id=cast(int, listing.id),
@@ -155,7 +182,7 @@ def scrape_competitor_prices():
                         total_competitors_inner += 1
 
                     logger.info(
-                        "Found %d competitors for listing %d", len(similar_items), listing.id
+                        "Stored %d competitors for listing %d", len(competitors), listing.id
                     )
 
                 except Exception as e:

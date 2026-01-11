@@ -160,6 +160,17 @@ def delete_old_competitor_prices(db: Session, days: int = 30) -> int:
     return deleted
 
 
+def delete_competitor_prices_for_listing(db: Session, listing_id: int) -> int:
+    """Delete all competitor prices for a specific listing."""
+    deleted = (
+        db.query(CompetitorPrice)
+        .filter(CompetitorPrice.listing_id == listing_id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted
+
+
 # JobExecution CRUD
 def create_job_execution(db: Session, job_id: str, job_name: str) -> JobExecution:
     """Create job execution entry."""

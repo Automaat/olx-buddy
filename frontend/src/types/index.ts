@@ -131,9 +131,12 @@ export interface ScheduledJob {
 }
 
 export interface JobExecution {
+  id: number
   job_id: string
-  run_time: string
-  success: boolean
-  error?: string
-  result?: any
+  job_name: string
+  status: string
+  started_at: string
+  completed_at: string | null
+  error_message: string | null
+  result_data: any | null
 }
