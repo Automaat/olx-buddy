@@ -4,6 +4,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import cast
+from urllib.parse import urlparse, urlunparse
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -11,6 +12,7 @@ from app.config import settings
 from app.crud import (
     create_competitor_price,
     create_job_execution,
+    delete_competitor_prices_for_listing,
     delete_old_competitor_prices,
     get_listings,
     update_job_execution,
@@ -21,6 +23,30 @@ from app.services.scraper import ScraperService
 
 logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
+
+
+def normalize_url(url: str | None) -> str:
+    """Normalize URL for comparison (remove trailing slash, ensure https, remove www)."""
+    if not url:
+        return ""
+
+    parsed = urlparse(url.strip().lower())
+
+    # Ensure https
+    scheme = "https" if parsed.scheme in ("http", "https") else parsed.scheme
+
+    # Remove www prefix
+    netloc = (
+        parsed.netloc.replace("www.", "", 1) if parsed.netloc.startswith("www.") else parsed.netloc
+    )
+
+    # Remove trailing slash from path
+    path = parsed.path.rstrip("/")
+
+    # Reconstruct without query/fragment for comparison
+    normalized = urlunparse((scheme, netloc, path, "", "", ""))
+
+    return normalized
 
 
 def refresh_active_listings():
@@ -141,8 +167,32 @@ def scrape_competitor_prices():
                         max_results=10,
                     )
 
-                    # Store competitor prices
-                    for item in similar_items:
+                    logger.info(
+                        "Scraper returned %d similar items for listing %d",
+                        len(similar_items),
+                        listing.id,
+                    )
+
+                    # Filter out own listing (normalize URLs for comparison)
+                    listing_url = cast(str | None, listing.url)
+                    normalized_listing_url = normalize_url(listing_url)
+                    competitors = [
+                        item
+                        for item in similar_items
+                        if normalize_url(item.url) != normalized_listing_url
+                    ]
+
+                    logger.info(
+                        "Filtered to %d competitors (excluded own listing) for listing %d",
+                        len(competitors),
+                        listing.id,
+                    )
+
+                    # Capture timestamp before inserting new prices (for atomic delete)
+                    scrape_timestamp = datetime.utcnow()
+
+                    # Store new competitor prices first
+                    for item in competitors:
                         create_competitor_price(
                             db=db,
                             listing_id=cast(int, listing.id),
@@ -155,7 +205,18 @@ def scrape_competitor_prices():
                         total_competitors_inner += 1
 
                     logger.info(
-                        "Found %d competitors for listing %d", len(similar_items), listing.id
+                        "Stored %d competitors for listing %d", len(competitors), listing.id
+                    )
+
+                    # Delete old competitor prices after successful insert (atomicity)
+                    # Only delete records scraped before current timestamp to preserve new data
+                    deleted = delete_competitor_prices_for_listing(
+                        db, cast(int, listing.id), before=scrape_timestamp
+                    )
+                    logger.info(
+                        "Deleted %d old competitor prices for listing %d",
+                        deleted,
+                        listing.id,
                     )
 
                 except Exception as e:

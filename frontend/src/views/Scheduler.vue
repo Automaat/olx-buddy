@@ -53,20 +53,20 @@
                   v-for="(execution, index) in jobHistories[job.id]"
                   :key="index"
                   class="history-item"
-                  :class="{ success: execution.success, failure: !execution.success }"
+                  :class="{ success: execution.status === 'success', failure: execution.status !== 'success' }"
                 >
                   <div class="history-header">
                     <span class="status-badge">
-                      {{ execution.success ? '✓ Success' : '✗ Failed' }}
+                      {{ execution.status === 'success' ? '✓ Success' : '✗ Failed' }}
                     </span>
-                    <span class="timestamp">{{ formatDateTime(execution.run_time) }}</span>
+                    <span class="timestamp">{{ formatDateTime(execution.started_at) }}</span>
                   </div>
-                  <div v-if="execution.error" class="error-message">
-                    <strong>Error:</strong> {{ execution.error }}
+                  <div v-if="execution.error_message" class="error-message">
+                    <strong>Error:</strong> {{ execution.error_message }}
                   </div>
-                  <div v-if="execution.result" class="result-data">
+                  <div v-if="execution.result_data" class="result-data">
                     <strong>Result:</strong>
-                    <pre>{{ JSON.stringify(execution.result, null, 2) }}</pre>
+                    <pre>{{ JSON.stringify(execution.result_data, null, 2) }}</pre>
                   </div>
                 </div>
               </div>
@@ -94,21 +94,21 @@
             v-for="(execution, index) in allHistory"
             :key="index"
             class="history-item"
-            :class="{ success: execution.success, failure: !execution.success }"
+            :class="{ success: execution.status === 'success', failure: execution.status !== 'success' }"
           >
             <div class="history-header">
               <span class="job-id">{{ execution.job_id }}</span>
               <span class="status-badge">
-                {{ execution.success ? '✓ Success' : '✗ Failed' }}
+                {{ execution.status === 'success' ? '✓ Success' : '✗ Failed' }}
               </span>
-              <span class="timestamp">{{ formatDateTime(execution.run_time) }}</span>
+              <span class="timestamp">{{ formatDateTime(execution.started_at) }}</span>
             </div>
-            <div v-if="execution.error" class="error-message">
-              <strong>Error:</strong> {{ execution.error }}
+            <div v-if="execution.error_message" class="error-message">
+              <strong>Error:</strong> {{ execution.error_message }}
             </div>
-            <div v-if="execution.result" class="result-data">
+            <div v-if="execution.result_data" class="result-data">
               <strong>Result:</strong>
-              <pre>{{ JSON.stringify(execution.result, null, 2) }}</pre>
+              <pre>{{ JSON.stringify(execution.result_data, null, 2) }}</pre>
             </div>
           </div>
         </div>

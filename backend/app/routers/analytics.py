@@ -124,19 +124,17 @@ async def price_monitoring(
         prices_list.append(
             {
                 "id": cp.id,
-                "platform": cp.platform,
+                "source_platform": cp.platform,
                 "competitor_url": cp.competitor_url,
-                "competitor_title": cp.competitor_title,
-                "price": price_val,
+                "title": cp.competitor_title,
+                "competitor_price": price_val,
+                "currency": "PLN",
                 "similarity_score": similarity_val,
-                "scraped_at": cp.scraped_at.isoformat(),
+                "checked_at": cp.scraped_at.isoformat(),
             }
         )
 
-    return {
-        "listing_id": listing_id,
-        "competitor_prices": prices_list,
-    }
+    return prices_list
 
 
 @router.get("/price-monitoring/{listing_id}/history")

@@ -42,12 +42,12 @@ class TestScraperService:
         """Test successful OLX search."""
         html_content = """
         <div data-cy="l-card">
-            <h6>Test Item 1</h6>
+            <h4>Test Item 1</h4>
             <a href="/item/1">Link</a>
             <p data-testid="ad-price">100 zł</p>
         </div>
         <div data-cy="l-card">
-            <h6>Test Item 2</h6>
+            <h4>Test Item 2</h4>
             <a href="/item/2">Link</a>
             <p data-testid="ad-price">200,50 zł</p>
         </div>
@@ -104,12 +104,12 @@ class TestScraperService:
         """Test OLX search with invalid listing structure."""
         html_content = """
         <div data-cy="l-card">
-            <h6>Valid Item</h6>
+            <h4>Valid Item</h4>
             <a href="/item/1">Link</a>
             <p data-testid="ad-price">100 zł</p>
         </div>
         <div data-cy="l-card">
-            <h6>Invalid Item - No Price</h6>
+            <h4>Invalid Item - No Price</h4>
             <a href="/item/2">Link</a>
         </div>
         <div data-cy="l-card">

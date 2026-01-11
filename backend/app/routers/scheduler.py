@@ -1,10 +1,11 @@
 """Scheduler monitoring API endpoints."""
 
+import asyncio
 import logging
 from typing import Any
 
 from apscheduler.job import Job
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -111,13 +112,19 @@ async def get_all_history(
 
 
 @router.post("/jobs/{job_id}/run")
-async def run_job_now(job_id: str) -> dict[str, str]:
+async def run_job_now(job_id: str, background_tasks: BackgroundTasks) -> dict[str, str]:
     """Manually trigger a job to run immediately."""
     job = scheduler.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    job.modify(next_run_time=None)  # Run immediately
+    # Execute job function in background thread
+    job_func = job.func
+
+    async def run_job_async():
+        await asyncio.to_thread(job_func)
+
+    background_tasks.add_task(run_job_async)
     logger.info("Manually triggered job %s", job_id)
 
     return {"status": "triggered", "job_id": job_id, "job_name": job.name or job_id}

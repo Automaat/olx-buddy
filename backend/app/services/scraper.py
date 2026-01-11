@@ -114,7 +114,7 @@ class ScraperService:
                 for listing in listings:
                     try:
                         # Title and URL
-                        title_elem = listing.find("h6")
+                        title_elem = listing.find("h4")
                         if not title_elem:
                             continue
 
