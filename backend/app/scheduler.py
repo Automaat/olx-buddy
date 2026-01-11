@@ -150,9 +150,7 @@ def scrape_competitor_prices():
 
                     # Filter out own listing
                     listing_url = cast(str | None, listing.url)
-                    competitors = [
-                        item for item in similar_items if item.url != listing_url
-                    ]
+                    competitors = [item for item in similar_items if item.url != listing_url]
 
                     logger.info(
                         "Filtered to %d competitors (excluded own listing) for listing %d",
