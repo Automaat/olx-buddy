@@ -120,6 +120,7 @@ async def run_job_now(job_id: str, background_tasks: BackgroundTasks) -> dict[st
 
     # Execute job function in background thread
     job_func = job.func
+
     async def run_job_async():
         await asyncio.to_thread(job_func)
 
